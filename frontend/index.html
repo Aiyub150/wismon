@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows System Monitoring — Advanced Observability & Telemetry</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/css/variables.css">
+  <link rel="stylesheet" href="/static/css/layout.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/dahoo.css">
+</head>
+<body>
+  <div id="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">⚡</div>
+        <span class="brand-text">SysMonitor</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <!-- Overview -->
+        <div class="nav-section-title">Overview</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item active" data-page="dashboard">
+              <span class="icon">📊</span>
+              <span>Dashboard</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- System -->
+        <div class="nav-section-title">System</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item" data-page="cpu">
+              <span class="icon">⚡</span>
+              <span>CPU</span>
+            </a>
+          </li>
+          <li>
+            <a class="nav-item" data-page="memory">
+              <span class="icon">🧠</span>
+              <span>Memory</span>
+            </a>
+          </li>
+          <li>
+            <a class="nav-item" data-page="storage">
+              <span class="icon">💾</span>
+              <span>Storage</span>
+            </a>
+          </li>
+          <li>
+            <a class="nav-item" data-page="network">
+              <span class="icon">🌐</span>
+              <span>Network</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Activity -->
+        <div class="nav-section-title">Activity</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item" data-page="processes">
+              <span class="icon">⚙️</span>
+              <span>Processes</span>
+            </a>
+          </li>
+          <li>
+            <a class="nav-item" data-page="services">
+              <span class="icon">🔧</span>
+              <span>Services</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Security -->
+        <div class="nav-section-title">Security</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item" data-page="security">
+              <span class="icon">🛡️</span>
+              <span>Threat Center</span>
+              <span class="nav-badge" id="nav-threat-count-badge" style="display: none;">0</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Hardware -->
+        <div class="nav-section-title">Hardware</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item" data-page="hardware">
+              <span class="icon">🖥️</span>
+              <span>Hardware & GPU</span>
+            </a>
+          </li>
+        </ul>
+
+        <!-- Analysis -->
+        <div class="nav-section-title">Analysis</div>
+        <ul class="nav-list">
+          <li>
+            <a class="nav-item" data-page="analysis">
+              <span class="icon">📈</span>
+              <span>Analysis & History</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div id="main-wrapper">
+      
+      <!-- Topbar -->
+      <header id="topbar">
+        <div class="topbar-left">
+          <div class="page-title-badge" id="topbar-page-title">System Overview</div>
+          <div class="search-box" id="topbar-search-box">
+            <span>🔍</span>
+            <span>Search processes, sockets...</span>
+            <kbd>Ctrl+K</kbd>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="status-pill online" id="topbar-status-pill">
+            <div class="status-dot"></div>
+            <span id="topbar-status-text">Connecting...</span>
+          </div>
+
+          <button class="btn btn-secondary" id="topbar-dahoo-btn" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem;">
+            <span>🤖</span>
+            <span>Dahoo</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Viewport Views -->
+      <main id="content-viewport">
+        
+        <!-- PAGE: Dashboard -->
+        <section id="page-dashboard" class="page-view active">
+          
+          <!-- System Health Dial Hero -->
+          <div class="health-hero-card">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); font-weight: 700;">Operating System Status</span>
+                <span class="badge badge-healthy" id="dash-health-status">Healthy</span>
+              </div>
+              <h1 style="font-family: var(--font-display); font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem;">
+                System Telemetry & Health Gauge
+              </h1>
+              <p class="text-secondary" style="font-size: 0.85rem; max-width: 580px;">
+                Observing telemetry across Kernel, Memory Pools, Network Sockets, and Windows Services in real time.
+              </p>
+            </div>
+
+            <div class="health-score-dial" id="dash-health-dial">
+              <span class="dial-number" id="dash-health-score">--</span>
+              <span class="dial-label">Score / 100</span>
+            </div>
+          </div>
+
+          <!-- 8 KPI Cards Grid -->
+          <div class="kpi-grid">
+            <!-- 1. CPU -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">CPU Usage</span>
+                <div class="kpi-icon">⚡</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-cpu-val">0%</span>
+              </div>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-cpu-bar" style="width: 0%;"></div>
+              </div>
+              <span class="kpi-subtext">Real-time load</span>
+            </div>
+
+            <!-- 2. Memory -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Memory Usage</span>
+                <div class="kpi-icon">🧠</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-mem-val">0%</span>
+              </div>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-mem-bar" style="width: 0%;"></div>
+              </div>
+              <span class="kpi-subtext" id="kpi-mem-sub">0 / 0 GB</span>
+            </div>
+
+            <!-- 3. Storage -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Storage (Drives)</span>
+                <div class="kpi-icon">💾</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-storage-val">0%</span>
+              </div>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-storage-bar" style="width: 0%;"></div>
+              </div>
+              <span class="kpi-subtext" id="kpi-storage-sub">Mounted disks</span>
+            </div>
+
+            <!-- 4. CPU Thermal -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">CPU Temperature</span>
+                <div class="kpi-icon">🌡️</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-temp-val">--</span>
+              </div>
+              <span class="kpi-subtext" id="kpi-temp-sub">ACPI Sensor</span>
+            </div>
+
+            <!-- 5. GPU Usage -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">GPU Utilization</span>
+                <div class="kpi-icon">🎮</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-gpu-val">--</span>
+              </div>
+              <span class="kpi-subtext" id="kpi-gpu-sub">Display adapter</span>
+            </div>
+
+            <!-- 6. GPU Temp -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">GPU Temperature</span>
+                <div class="kpi-icon">🔥</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-gputemp-val">--</span>
+              </div>
+              <span class="kpi-subtext">Thermal diode</span>
+            </div>
+
+            <!-- 7. Network Throughput -->
+            <div class="card kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Network Speed</span>
+                <div class="kpi-icon">🌐</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-net-val">0.00 Mbps</span>
+              </div>
+              <span class="kpi-subtext" id="kpi-net-sub">↓ 0 KB/s  ↑ 0 KB/s</span>
+            </div>
+
+            <!-- 8. Active Threats -->
+            <div class="card kpi-card" id="kpi-threats-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Active Threats</span>
+                <div class="kpi-icon">🛡️</div>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value" id="kpi-threats-val">0</span>
+              </div>
+              <span class="kpi-subtext" id="kpi-threats-sub">Security Center</span>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>⚡</span> CPU Utilization Trend (60s)</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="dash-cpu-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🧠</span> Memory Utilization Trend</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="dash-mem-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Processes Quick Table -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🔥</span> Top Processes by CPU Load</div>
+              <button class="btn btn-secondary" onclick="app.navigate('processes')">View All Processes →</button>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>PID</th>
+                    <th>Process Name</th>
+                    <th>CPU %</th>
+                    <th>Working Set (RAM)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-top-procs-tbody">
+                  <tr><td colspan="5" class="text-center text-muted">Awaiting telemetry...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: CPU -->
+        <section id="page-cpu" class="page-view">
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 id="cpu-brand-name" style="font-family: var(--font-display); font-size: 1.35rem;">Windows Processor</h2>
+                <div class="text-muted font-mono" id="cpu-cores-text" style="font-size: 0.8rem; margin-top: 0.2rem;">Physical / Logical Cores</div>
+              </div>
+              <div style="display: flex; gap: 1.5rem; text-align: right;">
+                <div>
+                  <div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Frequency</div>
+                  <div class="font-mono text-cyan" id="cpu-freq-text" style="font-size: 1.25rem; font-weight: 700;">0 MHz</div>
+                </div>
+                <div>
+                  <div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Total Load</div>
+                  <div class="font-mono text-primary" id="cpu-total-perc" style="font-size: 1.25rem; font-weight: 700;">0%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Per Core Matrix -->
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <div class="card-title"><span>🔲</span> Per-Core Workload Matrix</div>
+            </div>
+            <div id="cpu-cores-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75rem;">
+              <!-- Dynamic Core Tiles -->
+            </div>
+          </div>
+
+          <!-- Detailed Chart & Analysis -->
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>📈</span> Real-Time CPU Load Curve</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="cpu-detailed-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🔍</span> CPU Diagnostic Analysis</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.84rem;">
+                <div>
+                  <span class="text-muted">Dynamic Baseline:</span>
+                  <strong class="font-mono text-primary" id="cpu-analysis-baseline">15–40%</strong>
+                </div>
+                <div>
+                  <span class="text-muted">Primary Contributor:</span>
+                  <strong class="font-mono text-cyan" id="cpu-analysis-contrib">None</strong>
+                </div>
+                <div class="card" style="background: rgba(0,0,0,0.3); padding: 0.75rem;">
+                  <strong style="color: var(--accent-cyan);">Summary:</strong>
+                  <p id="cpu-analysis-summary" style="margin-top: 0.25rem; color: var(--text-secondary);">Calculating baseline telemetry...</p>
+                </div>
+                <div class="card" style="background: rgba(6,182,212,0.06); border-color: rgba(6,182,212,0.2); padding: 0.75rem;">
+                  <strong style="color: var(--accent-emerald);">Recommendation:</strong>
+                  <p id="cpu-analysis-rec" style="margin-top: 0.25rem; color: var(--text-primary);">Awaiting telemetry.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Memory -->
+        <section id="page-memory" class="page-view">
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-family: var(--font-display); font-size: 1.35rem;">Physical Memory & Kernel Pools</h2>
+                <div class="text-muted font-mono" id="mem-capacity-text" style="font-size: 0.8rem;">0 GB Total</div>
+              </div>
+              <div class="font-mono text-cyan" id="mem-total-perc" style="font-size: 2rem; font-weight: 800;">0%</div>
+            </div>
+          </div>
+
+          <!-- Basic RAM Breakdown -->
+          <div class="kpi-grid">
+            <div class="card kpi-card">
+              <span class="kpi-label">In Use</span>
+              <span class="kpi-value font-mono" id="mem-used-text">0 GB</span>
+            </div>
+            <div class="card kpi-card">
+              <span class="kpi-label">Available</span>
+              <span class="kpi-value font-mono" id="mem-available-text">0 GB</span>
+            </div>
+            <div class="card kpi-card">
+              <span class="kpi-label">Free</span>
+              <span class="kpi-value font-mono" id="mem-free-text">0 GB</span>
+            </div>
+            <div class="card kpi-card">
+              <span class="kpi-label">System Cache</span>
+              <span class="kpi-value font-mono" id="mem-system-cache">0 GB</span>
+            </div>
+          </div>
+
+          <!-- Deep Memory (Paged, Nonpaged, Commit Charge) -->
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🧬</span> Win32 Kernel Pools & Commit Space</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.35rem;">
+                    <span>Commit Charge</span>
+                    <span class="font-mono text-primary" id="mem-commit-charge">0 / 0 GB</span>
+                  </div>
+                  <div class="progress-container" style="height: 6px;">
+                    <div class="progress-bar" id="mem-commit-bar" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+                  <div class="card" style="padding: 0.75rem;">
+                    <span class="text-muted" style="font-size: 0.75rem;">Paged Pool</span>
+                    <div class="font-mono text-cyan" id="mem-paged-pool" style="font-size: 1.1rem; font-weight: 700;">0 MB</div>
+                  </div>
+                  <div class="card" style="padding: 0.75rem;">
+                    <span class="text-muted" style="font-size: 0.75rem;">Non-Paged Pool</span>
+                    <div class="font-mono text-indigo" id="mem-nonpaged-pool" style="font-size: 1.1rem; font-weight: 700;">0 MB</div>
+                  </div>
+                </div>
+
+                <div>
+                  <span class="text-muted" style="font-size: 0.75rem;">Active System Handles:</span>
+                  <strong class="font-mono text-primary" id="mem-handles-count">0</strong>
+                </div>
+
+                <div class="card" style="background: rgba(0,0,0,0.25); padding: 0.85rem; font-size: 0.8rem;" id="mem-diagnostics-text">
+                  Evaluating memory stability...
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>📊</span> Memory Allocation Trend</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="mem-detailed-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Storage -->
+        <section id="page-storage" class="page-view">
+          <div class="card-header">
+            <h2 style="font-family: var(--font-display); font-size: 1.35rem;">Mounted Disks & Volumes</h2>
+            <button class="btn btn-primary" id="run-storage-scan-btn">Run Storage Analyzer Scan</button>
+          </div>
+
+          <!-- Drives List -->
+          <div id="storage-drives-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <!-- Dynamic Drives -->
+          </div>
+
+          <!-- Live Disk I/O -->
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>⚡</span> Live Disk Throughput Curve</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="storage-io-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>📊</span> Disk I/O Operations</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="card" style="padding: 0.85rem;">
+                  <span class="text-muted" style="font-size: 0.75rem;">Read Rate</span>
+                  <div class="font-mono text-cyan" id="disk-read-speed" style="font-size: 1.35rem; font-weight: 700;">0.00 MB/s</div>
+                  <div class="text-muted font-mono" id="disk-read-ops" style="font-size: 0.75rem;">0 ops/s</div>
+                </div>
+                <div class="card" style="padding: 0.85rem;">
+                  <span class="text-muted" style="font-size: 0.75rem;">Write Rate</span>
+                  <div class="font-mono text-emerald" id="disk-write-speed" style="font-size: 1.35rem; font-weight: 700;">0.00 MB/s</div>
+                  <div class="text-muted font-mono" id="disk-write-ops" style="font-size: 0.75rem;">0 ops/s</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Storage Analyzer Results Container -->
+          <div class="card" id="storage-analyzer-results" style="display: none; margin-top: 1.5rem;">
+            <div class="card-header">
+              <div class="card-title"><span>🧹</span> Storage Analyzer Insights (Safe Review Mode)</div>
+              <span class="badge badge-info">Never auto-deletes files</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+              <div class="card" style="padding: 0.75rem;">
+                <span class="text-muted" style="font-size: 0.75rem;">Temp Directory Space</span>
+                <div class="font-mono text-amber" id="analyzer-temp-mb" style="font-size: 1.25rem; font-weight: 700;">0 MB</div>
+                <span class="text-muted" style="font-size: 0.7rem;" id="analyzer-temp-count">0 files</span>
+              </div>
+              <div class="card" style="padding: 0.75rem;">
+                <span class="text-muted" style="font-size: 0.75rem;">Estimated Reclaimable</span>
+                <div class="font-mono text-emerald" id="analyzer-reclaimable" style="font-size: 1.25rem; font-weight: 700;">0 MB</div>
+                <span class="text-muted" style="font-size: 0.7rem;">Old/Temp cleanup potential</span>
+              </div>
+            </div>
+
+            <h4 style="font-size: 0.875rem; margin-bottom: 0.5rem;">Largest Discovered Files (> 100 MB)</h4>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>File Name & Location</th>
+                    <th>Size</th>
+                    <th>Category</th>
+                  </tr>
+                </thead>
+                <tbody id="analyzer-large-files-tbody">
+                  <tr><td colspan="3" class="text-center text-muted">No scan run yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Network -->
+        <section id="page-network" class="page-view">
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>📈</span> Bandwidth Throughput (KB/s)</div>
+                <div class="font-mono text-cyan" id="net-total-speed">0.0 KB/s</div>
+              </div>
+              <div class="chart-container">
+                <canvas id="network-tput-canvas" class="chart-canvas"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>📡</span> Network Speed Breakdown</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                <div class="card" style="padding: 0.85rem;">
+                  <span class="text-muted" style="font-size: 0.75rem;">Download</span>
+                  <div class="font-mono text-cyan" id="net-dl-speed" style="font-size: 1.35rem; font-weight: 700;">0.0 KB/s</div>
+                </div>
+                <div class="card" style="padding: 0.85rem;">
+                  <span class="text-muted" style="font-size: 0.75rem;">Upload</span>
+                  <div class="font-mono text-indigo" id="net-ul-speed" style="font-size: 1.35rem; font-weight: 700;">0.0 KB/s</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Network Adapters -->
+          <div style="margin-bottom: 1.5rem;">
+            <h3 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 0.75rem;">Active Network Adapters</h3>
+            <div id="network-interfaces-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+              <!-- Dynamic Adapters -->
+            </div>
+          </div>
+
+          <!-- Socket Explorer -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🔌</span> Socket Explorer & Reverse DNS Resolution</div>
+              <span class="badge badge-info" id="sockets-count-badge">0 Sockets</span>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Proto</th>
+                    <th>Local Address</th>
+                    <th>Remote Address</th>
+                    <th>Resolved Hostname</th>
+                    <th>State</th>
+                    <th>PID</th>
+                    <th>Process</th>
+                  </tr>
+                </thead>
+                <tbody id="network-sockets-tbody">
+                  <tr><td colspan="7" class="text-center text-muted">Polling network connections...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Processes -->
+        <section id="page-processes" class="page-view">
+          <div class="card" style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 250px;">
+                <input type="text" id="proc-search-input" class="chat-input" placeholder="Search processes by name, PID, path...">
+                <select id="proc-sort-select" class="chat-input" style="width: 160px;">
+                  <option value="cpu_percent">Sort: CPU %</option>
+                  <option value="memory_bytes">Sort: Memory</option>
+                  <option value="threads">Sort: Threads</option>
+                  <option value="handles">Sort: Handles</option>
+                  <option value="name">Sort: Name</option>
+                </select>
+              </div>
+              <span class="badge badge-info" id="proc-total-count">0 Processes</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>PID</th>
+                    <th>Process Name</th>
+                    <th>CPU %</th>
+                    <th>Memory</th>
+                    <th>Threads</th>
+                    <th>Handles</th>
+                    <th>User</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="processes-tbody">
+                  <tr><td colspan="8" class="text-center text-muted">Loading live Windows processes...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Services -->
+        <section id="page-services" class="page-view">
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary service-filter-btn active" data-filter="all">All</button>
+                <button class="btn btn-secondary service-filter-btn" data-filter="running">Running</button>
+                <button class="btn btn-secondary service-filter-btn" data-filter="stopped">Stopped</button>
+              </div>
+              <input type="text" id="services-search-input" class="chat-input" placeholder="Filter services by name or description..." style="width: 320px;">
+              <div style="display: flex; gap: 0.5rem;">
+                <span class="badge badge-info" id="services-total-count">0 Total</span>
+                <span class="badge badge-healthy" id="services-running-count">0 Running</span>
+                <span class="badge badge-warning" id="services-stopped-count">0 Stopped</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- svchost Tree Hierarchy -->
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <div class="card-title"><span>🧩</span> svchost.exe Shared Process Mappings</div>
+            </div>
+            <div id="svchost-tree-container">
+              <!-- Dynamic Grouping -->
+            </div>
+          </div>
+
+          <!-- All Services Table -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>⚙️</span> Registered Windows Services</div>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Service Name</th>
+                    <th>Display Name</th>
+                    <th>PID</th>
+                    <th>Status</th>
+                    <th>Startup Type</th>
+                    <th>Binary Path</th>
+                  </tr>
+                </thead>
+                <tbody id="services-tbody">
+                  <tr><td colspan="6" class="text-center text-muted">Enumerating services...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Security / Threat Center -->
+        <section id="page-security" class="page-view">
+          <div class="card-header">
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 1.35rem;">Security & Threat Center</h2>
+              <p class="text-secondary" style="font-size: 0.8rem;">Monitors anomalous socket bursts, resource hogs, and critical events with controlled mitigation.</p>
+            </div>
+            <span class="badge badge-healthy" id="security-threat-badge">0 Active</span>
+          </div>
+
+          <!-- Active Threats -->
+          <div id="security-threats-container">
+            <!-- Dynamic Threats -->
+          </div>
+
+          <!-- Historical Security Events -->
+          <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+              <div class="card-title"><span>📜</span> Security Event Log & Mitigation History</div>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Category</th>
+                    <th>Severity</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th>Action Taken</th>
+                  </tr>
+                </thead>
+                <tbody id="security-history-tbody">
+                  <tr><td colspan="6" class="text-center text-muted">Loading historical events...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Hardware & GPU -->
+        <section id="page-hardware" class="page-view">
+          <div class="content-grid-2">
+            <!-- GPU -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🎮</span> Graphics Processing Unit (GPU)</div>
+                <span class="badge badge-info" id="hw-gpu-status">Checking</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div>
+                  <span class="text-muted" style="font-size: 0.75rem;">Adapter Model:</span>
+                  <h3 id="hw-gpu-name" style="font-family: var(--font-display); font-size: 1.15rem;">Detecting...</h3>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem;">
+                  <div class="card" style="padding: 0.75rem;">
+                    <span class="text-muted" style="font-size: 0.75rem;">Utilization</span>
+                    <div class="font-mono text-cyan" id="hw-gpu-usage" style="font-size: 1.15rem; font-weight: 700;">--</div>
+                  </div>
+                  <div class="card" style="padding: 0.75rem;">
+                    <span class="text-muted" style="font-size: 0.75rem;">VRAM</span>
+                    <div class="font-mono text-indigo" id="hw-gpu-vram" style="font-size: 1.15rem; font-weight: 700;">--</div>
+                  </div>
+                  <div class="card" style="padding: 0.75rem;">
+                    <span class="text-muted" style="font-size: 0.75rem;">Temperature</span>
+                    <div class="font-mono text-rose" id="hw-gpu-temp" style="font-size: 1.15rem; font-weight: 700;">--</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Battery -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🔋</span> Battery & Power Subsystem</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span class="font-mono text-emerald" id="hw-battery-percent" style="font-size: 2rem; font-weight: 800;">100%</span>
+                  <span class="badge badge-healthy" id="hw-battery-state">Checking...</span>
+                </div>
+                <div class="progress-container" style="height: 8px;">
+                  <div class="progress-bar" id="hw-battery-bar" style="width: 100%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thermal Zones & Platform Metadata -->
+          <div class="content-grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🌡️</span> ACPI Hardware Thermal Zones</div>
+              </div>
+              <div id="hw-thermal-zones" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <div class="text-muted">Querying thermal zones...</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><span>🖥️</span> System Platform Metadata</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.82rem;" class="font-mono text-secondary">
+                <div><span class="text-muted">OS Version:</span> <span id="hw-sys-os" class="text-primary">--</span></div>
+                <div><span class="text-muted">Architecture:</span> <span id="hw-sys-arch" class="text-primary">--</span></div>
+                <div><span class="text-muted">Processor:</span> <span id="hw-sys-proc" class="text-primary">--</span></div>
+                <div><span class="text-muted">Hostname:</span> <span id="hw-sys-host" class="text-primary">--</span></div>
+                <div><span class="text-muted">Uptime:</span> <span id="hw-sys-uptime" class="text-cyan">--</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PAGE: Analysis -->
+        <section id="page-analysis" class="page-view">
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <div class="card-title"><span>📊</span> Statistical Baselines & Anomaly Bounds</div>
+              <span class="badge badge-info">Level 3 Analysis Engine</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+              <div class="card" style="padding: 0.85rem;">
+                <span class="text-muted" style="font-size: 0.75rem;">CPU Normal Baseline</span>
+                <div class="font-mono text-cyan" id="base-cpu-minmax" style="font-size: 1.25rem; font-weight: 700;">15–45%</div>
+                <span class="text-muted font-mono" style="font-size: 0.7rem;">Average: <span id="base-cpu-avg">--</span></span>
+              </div>
+              <div class="card" style="padding: 0.85rem;">
+                <span class="text-muted" style="font-size: 0.75rem;">RAM Normal Baseline</span>
+                <div class="font-mono text-indigo" id="base-ram-minmax" style="font-size: 1.25rem; font-weight: 700;">35–65%</div>
+                <span class="text-muted font-mono" style="font-size: 0.7rem;">Average: <span id="base-ram-avg">--</span></span>
+              </div>
+              <div class="card" style="padding: 0.85rem;">
+                <span class="text-muted" style="font-size: 0.75rem;">Network Baseline</span>
+                <div class="font-mono text-emerald" id="base-net-minmax" style="font-size: 1.25rem; font-weight: 700;">0.1–10.0 Mbps</div>
+                <span class="text-muted font-mono" style="font-size: 0.7rem;">Average: <span id="base-net-avg">--</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historical Time Series -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>📈</span> Historical Telemetry Curve (SQLite DB)</div>
+              <div style="display: flex; gap: 0.4rem;">
+                <button class="btn btn-secondary history-range-btn active" data-seconds="3600">1 Hour</button>
+                <button class="btn btn-secondary history-range-btn" data-seconds="21600">6 Hours</button>
+                <button class="btn btn-secondary history-range-btn" data-seconds="86400">24 Hours</button>
+              </div>
+            </div>
+            <div class="chart-container" style="height: 260px;">
+              <canvas id="analysis-history-canvas" class="chart-canvas"></canvas>
+            </div>
+            <div style="display: flex; gap: 1.5rem; margin-top: 1rem; font-size: 0.8rem;" class="text-secondary font-mono">
+              <span>Avg CPU: <strong class="text-cyan" id="hist-avg-cpu">--</strong></span>
+              <span>Avg RAM: <strong class="text-indigo" id="hist-avg-ram">--</strong></span>
+              <span>Logged Samples: <strong class="text-primary" id="hist-samples-count">0</strong></span>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- Dahoo Mascot Floating Widget -->
+    <div id="dahoo-widget">
+      <div class="dahoo-bubble" id="dahoo-speech-bubble">
+        Aww! Semua sistem berjalan prima dan optimal.
+      </div>
+      <div class="dahoo-avatar-btn happy" id="dahoo-avatar">
+        <div class="dahoo-eyes">
+          <div class="dahoo-eye"></div>
+          <div class="dahoo-eye"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dahoo Chat Drawer -->
+    <aside id="dahoo-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title-row">
+          <span style="font-size: 1.5rem;">🤖</span>
+          <div>
+            <strong style="font-size: 0.95rem;">Dahoo Assistant</strong>
+            <div class="text-muted font-mono" style="font-size: 0.7rem;" id="dahoo-model-badge">Local Engine</div>
+          </div>
+        </div>
+        <button class="btn-icon modal-close-btn" id="close-dahoo-btn">✕</button>
+      </div>
+
+      <!-- Cost & Token Transparency Card (Section 28) -->
+      <div style="padding: 0.75rem 1.25rem 0 1.25rem;">
+        <div class="ai-cost-card">
+          <div class="ai-cost-row">
+            <span>Estimated AI Cost:</span>
+            <strong class="text-emerald" id="dahoo-cost-badge">$0.00000</strong>
+          </div>
+          <div class="ai-cost-row">
+            <span>Tokens Consumed:</span>
+            <strong class="text-cyan" id="dahoo-tokens-badge">0</strong>
+          </div>
+        </div>
+
+        <!-- Suggestion Chips -->
+        <div class="suggestion-container">
+          <div class="suggestion-pill">Bagaimana kondisi CPU?</div>
+          <div class="suggestion-pill">Berapa penggunaan RAM?</div>
+          <div class="suggestion-pill">Apakah ada ancaman aktif?</div>
+          <div class="suggestion-pill">Periksa kecepatan internet</div>
+        </div>
+      </div>
+
+      <div class="drawer-body" id="dahoo-chat-body">
+        <div class="chat-msg assistant">
+          <div class="chat-bubble">
+            Aww! Halo! Aku <strong>Dahoo</strong>, asisten observasi sistem kamu.<br><br>
+            Aku membaca telemetry hardware aktual dan siap membantumu memahami kondisi komputer, mendiagnosis beban kerja, atau memeriksa anomali keamanan!
+          </div>
+          <span class="chat-meta">Dahoo Local Engine • 0 tokens</span>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <div class="drawer-mode-toggle">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="dahoo-cloud-toggle">
+            <span>Enable Cloud AI (Gemini)</span>
+          </label>
+          <span class="text-muted">Offline Engine by default</span>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="dahoo-input" class="chat-input" placeholder="Tanya Dahoo seputar sistem...">
+          <button class="btn btn-primary" id="dahoo-send-btn">Send</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Modal: Process Inspect -->
+    <div class="modal-overlay" id="process-inspect-modal">
+      <div class="modal-box">
+        <div class="card-header">
+          <div class="card-title"><span>🔍</span> Process Details</div>
+          <button class="btn-icon modal-close-btn">✕</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem;" class="font-mono">
+          <div><span class="text-muted">Name:</span> <strong id="inspect-proc-name" class="text-cyan">--</strong></div>
+          <div><span class="text-muted">PID:</span> <span id="inspect-proc-pid">--</span></div>
+          <div><span class="text-muted">Path:</span> <span id="inspect-proc-path" style="font-size: 0.72rem; word-break: break-all;">--</span></div>
+          <div><span class="text-muted">User:</span> <span id="inspect-proc-user">--</span></div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+            <div class="card" style="padding: 0.5rem;">CPU: <strong id="inspect-proc-cpu" class="text-cyan">--</strong></div>
+            <div class="card" style="padding: 0.5rem;">RAM: <strong id="inspect-proc-mem" class="text-indigo">--</strong></div>
+            <div class="card" style="padding: 0.5rem;">Threads: <span id="inspect-proc-threads">--</span></div>
+            <div class="card" style="padding: 0.5rem;">Handles: <span id="inspect-proc-handles">--</span></div>
+          </div>
+          <div><span class="text-muted">I/O:</span> <span id="inspect-proc-io">--</span></div>
+          <div><span class="text-muted">Started:</span> <span id="inspect-proc-time">--</span></div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+          <button class="btn btn-secondary modal-close-btn">Close</button>
+          <button class="btn btn-danger" id="inspect-kill-btn">Terminate Process</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Confirm Kill -->
+    <div class="modal-overlay" id="process-kill-modal">
+      <div class="modal-box">
+        <div class="card-header">
+          <div class="card-title"><span style="color: var(--accent-rose);">⚠️</span> Confirm Process Termination</div>
+          <button class="btn-icon modal-close-btn">✕</button>
+        </div>
+        <p style="font-size: 0.88rem; margin-bottom: 1rem; color: var(--text-primary);">
+          Are you sure you want to terminate <strong id="kill-proc-name" class="text-rose">--</strong> (PID: <span id="kill-proc-pid">--</span>)?
+        </p>
+        <p class="text-secondary" style="font-size: 0.78rem; margin-bottom: 1.25rem;">
+          Terminating a process may cause unsaved data loss in that application. System processes cannot be terminated.
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+          <button class="btn btn-secondary modal-close-btn">Cancel</button>
+          <button class="btn btn-danger" id="confirm-kill-btn">Yes, Terminate</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Search Command Palette -->
+    <div class="modal-overlay" id="search-palette-modal">
+      <div class="modal-box" style="max-width: 500px; padding: 1rem;">
+        <input type="text" id="palette-input" class="chat-input" placeholder="Type a page or command name..." style="width: 100%; margin-bottom: 0.75rem; font-size: 0.95rem;">
+        <div id="palette-results" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 280px; overflow-y: auto;">
+          <!-- Dynamic Items -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/js/charts.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/dahoo.js"></script>
+  <script src="/static/js/pages/dashboard.js"></script>
+  <script src="/static/js/pages/cpu.js"></script>
+  <script src="/static/js/pages/memory.js"></script>
+  <script src="/static/js/pages/storage.js"></script>
+  <script src="/static/js/pages/network.js"></script>
+  <script src="/static/js/pages/processes.js"></script>
+  <script src="/static/js/pages/services.js"></script>
+  <script src="/static/js/pages/security.js"></script>
+  <script src="/static/js/pages/hardware.js"></script>
+  <script src="/static/js/pages/analysis.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

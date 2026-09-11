@@ -1,0 +1,36 @@
+"""
+Analysis & History REST API Routes for Windows System Monitoring.
+"""
+
+from fastapi import APIRouter, Query
+from backend.engine.aggregator import aggregator
+from backend.engine.storage_analyzer import storage_analyzer
+from backend.db import db_manager
+
+router = APIRouter(prefix="/api/analysis", tags=["Analysis"])
+
+@router.get("/baseline")
+async def get_baseline():
+    return aggregator.analysis_engine.get_baseline_stats()
+
+@router.get("/cpu_workload")
+async def get_cpu_workload():
+    cpu_data = aggregator.cpu_collector.last_data or {}
+    total_cpu = cpu_data.get("total_percent", 0.0)
+    proc_data = aggregator.process_collector.last_data or {}
+    top_proc = proc_data.get("top_cpu", [{}])[0] if proc_data.get("top_cpu") else {}
+    return aggregator.analysis_engine.analyze_cpu_workload(total_cpu, top_proc)
+
+@router.post("/storage/scan")
+async def trigger_storage_scan():
+    """Executes a background scan for large and temporary files."""
+    return storage_analyzer.scan()
+
+@router.get("/storage/last")
+async def get_last_storage_scan():
+    return storage_analyzer.get_last_scan()
+
+@router.get("/history")
+async def get_telemetry_history(seconds: int = Query(default=3600, ge=60, le=86400)):
+    """Fetches historical time-series telemetry from SQLite."""
+    return await db_manager.get_history(duration_seconds=seconds)
