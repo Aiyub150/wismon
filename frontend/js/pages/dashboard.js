@@ -51,11 +51,13 @@ class DashboardPage {
     const gpu = snap.gpu || {};
     const threats = snap.threats || [];
 
+    const timeStr = snap.timestamp ? new Date(snap.timestamp * 1000).toLocaleTimeString('en-GB') : null;
+
     // CPU KPI
     const cpuVal = cpu.total_percent !== undefined ? cpu.total_percent : 0;
     this.setElemText('kpi-cpu-val', `${cpuVal}%`);
     this.setElemWidth('kpi-cpu-bar', `${cpuVal}%`, cpuVal > 80 ? 'critical' : cpuVal > 60 ? 'warning' : '');
-    if (this.cpuChart) this.cpuChart.push(cpuVal);
+    if (this.cpuChart) this.cpuChart.push(cpuVal, timeStr);
 
     // RAM KPI
     const memVal = mem.percent !== undefined ? mem.percent : 0;
@@ -64,7 +66,7 @@ class DashboardPage {
     this.setElemText('kpi-mem-val', `${memVal}%`);
     this.setElemText('kpi-mem-sub', `${memUsedGb} / ${memTotalGb} GB`);
     this.setElemWidth('kpi-mem-bar', `${memVal}%`, memVal > 85 ? 'critical' : memVal > 70 ? 'warning' : '');
-    if (this.memChart) this.memChart.push(memVal);
+    if (this.memChart) this.memChart.push(memVal, timeStr);
 
     // Storage KPI
     const storOverall = storage.overall || {};
@@ -84,11 +86,13 @@ class DashboardPage {
       this.setElemText('kpi-temp-sub', 'Not exposed by BIOS');
     }
 
-    // GPU Usage & Temp
+    // GPU Usage & Temp (Dynamic Multi-GPU Support)
     if (gpu && gpu.available) {
-      this.setElemText('kpi-gpu-val', gpu.usage_percent !== null ? `${gpu.usage_percent}%` : 'Unavailable');
-      this.setElemText('kpi-gpu-sub', gpu.name || 'Dedicated GPU');
-      this.setElemText('kpi-gputemp-val', gpu.temperature_c !== null ? `${gpu.temperature_c}°C` : 'Unavailable');
+      const gpuName = gpu.name || 'Primary GPU';
+      const gpuUtil = gpu.usage_percent !== null && gpu.usage_percent !== undefined ? `${gpu.usage_percent}%` : 'Unavailable';
+      this.setElemText('kpi-gpu-val', gpuUtil);
+      this.setElemText('kpi-gpu-sub', `${gpuName} (${gpu.vendor || 'GPU'})`);
+      this.setElemText('kpi-gputemp-val', gpu.temperature_c !== null && gpu.temperature_c !== undefined ? `${gpu.temperature_c}°C` : 'Unavailable');
     } else {
       this.setElemText('kpi-gpu-val', 'Not available');
       this.setElemText('kpi-gpu-sub', 'Integrated graphics');
@@ -111,21 +115,32 @@ class DashboardPage {
       threatCard.style.borderColor = threats.length > 0 ? 'rgba(244, 63, 94, 0.4)' : '';
     }
 
-    // 3. Top 5 Processes Table
+    // 3. Top 5 Processes Table with Clear Descriptions & Idle Explanation
     const topProcs = snap.process ? snap.process.top_cpu : [];
     const procTbody = document.getElementById('dash-top-procs-tbody');
     if (procTbody && topProcs) {
-      procTbody.innerHTML = topProcs.map(p => `
-        <tr>
-          <td class="font-mono text-secondary">${p.pid}</td>
-          <td><strong>${escapeHtml(p.name)}</strong></td>
-          <td class="font-mono text-cyan">${p.cpu_percent}%</td>
-          <td class="font-mono">${(p.memory_bytes / (1024 * 1024)).toFixed(1)} MB</td>
-          <td>
-            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.7rem;" onclick="app.inspectProcess(${p.pid})">Inspect</button>
-          </td>
-        </tr>
-      `).join('');
+      procTbody.innerHTML = topProcs.map(p => {
+        const isIdle = p.is_idle || p.pid === 0 || p.name.toLowerCase().includes('idle');
+        const cpuText = isIdle 
+          ? `${p.cpu_percent_normalized || (p.cpu_percent / 8).toFixed(1)}% <span class="text-muted" style="font-size:0.65rem;">(Idle)</span>`
+          : `${p.cpu_percent}%`;
+
+        return `
+          <tr>
+            <td class="font-mono text-secondary">${p.pid}</td>
+            <td>
+              <strong>${escapeHtml(p.name)}</strong>
+              ${isIdle ? '<span class="badge badge-neutral font-mono" style="margin-left: 6px; font-size: 0.65rem;">Kernel Idle</span>' : ''}
+              <div class="text-muted" style="font-size: 0.7rem;">${escapeHtml(p.description || '')}</div>
+            </td>
+            <td class="font-mono ${isIdle ? 'text-secondary' : 'text-cyan'}">${cpuText}</td>
+            <td class="font-mono">${(p.memory_bytes / (1024 * 1024)).toFixed(1)} MB</td>
+            <td>
+              <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.7rem;" onclick="app.inspectProcess(${p.pid})">Inspect</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
   }
 

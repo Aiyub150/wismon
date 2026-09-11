@@ -9,8 +9,9 @@ class NetworkPage {
 
   init() {
     this.tputChart = new MiniChart('network-tput-canvas', {
-      color: '#06b6d4',
-      unit: 'KB/s',
+      color: '#3C50E0',
+      unit: ' KB/s',
+      label: 'Bandwidth',
       autoScaleY: true,
       maxPoints: 60
     });
@@ -21,7 +22,7 @@ class NetworkPage {
       if (window.app && window.app.currentPage === 'network') {
         this.fetchSockets();
       }
-    }, 5000);
+    }, 4000);
   }
 
   update(snap) {
@@ -35,11 +36,18 @@ class NetworkPage {
     const ulKbs = (tput.bytes_sent_sec / 1024).toFixed(1);
     const totalKbs = (parseFloat(dlKbs) + parseFloat(ulKbs)).toFixed(1);
 
-    document.getElementById('net-dl-speed').textContent = `${dlKbs} KB/s`;
-    document.getElementById('net-ul-speed').textContent = `${ulKbs} KB/s`;
-    document.getElementById('net-total-speed').textContent = `${totalKbs} KB/s`;
+    const dlElem = document.getElementById('net-dl-speed');
+    const ulElem = document.getElementById('net-ul-speed');
+    const totalElem = document.getElementById('net-total-speed');
 
-    if (this.tputChart) this.tputChart.push(parseFloat(totalKbs));
+    if (dlElem) dlElem.textContent = `${dlKbs} KB/s`;
+    if (ulElem) ulElem.textContent = `${ulKbs} KB/s`;
+    if (totalElem) totalElem.textContent = `${totalKbs} KB/s`;
+
+    if (this.tputChart) {
+      const timeStr = snap.timestamp ? new Date(snap.timestamp * 1000).toLocaleTimeString('en-GB') : null;
+      this.tputChart.push(parseFloat(totalKbs), timeStr);
+    }
 
     // 2. Interfaces Grid
     const ifacesContainer = document.getElementById('network-interfaces-list');
@@ -48,7 +56,11 @@ class NetworkPage {
         <div class="card" style="padding: 1rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.1rem;">${i.type === 'Wi-Fi' ? '📶' : '🌐'}</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+                ${i.type === 'Wi-Fi' 
+                  ? '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>'
+                  : '<rect width="16" height="12" x="2" y="6" rx="2"/><path d="M12 18v4M8 22h8"/>'}
+              </svg>
               <strong>${escapeHtml(i.name)}</strong>
             </div>
             <span class="badge ${i.is_up ? 'badge-healthy' : 'badge-warning'}">${i.status}</span>
@@ -70,18 +82,20 @@ class NetworkPage {
       if (res.ok) {
         const data = await res.json();
         const conns = data.connections || [];
-        document.getElementById('sockets-count-badge').textContent = `${conns.length} Sockets (${data.established_count || 0} Established)`;
+        const countBadge = document.getElementById('sockets-count-badge');
+        if (countBadge) {
+          countBadge.textContent = `${conns.length} Sockets (${data.established_count || 0} Established)`;
+        }
 
         const tbody = document.getElementById('network-sockets-tbody');
         if (tbody) {
-          // Show top 30 active connections
-          tbody.innerHTML = conns.slice(0, 30).map(c => `
+          tbody.innerHTML = conns.slice(0, 35).map(c => `
             <tr>
-              <td><span class="badge ${c.protocol === 'TCP' ? 'badge-info' : 'badge-warning'}">${c.protocol}</span></td>
+              <td><span class="badge ${c.protocol === 'TCP' ? 'badge-neutral' : 'badge-warning'} font-mono">${c.protocol}</span></td>
               <td class="font-mono text-secondary">${escapeHtml(c.local_address)}</td>
               <td class="font-mono text-cyan">${escapeHtml(c.remote_address)}</td>
               <td><span class="font-mono text-primary">${escapeHtml(c.remote_host)}</span></td>
-              <td><span class="badge ${c.state === 'ESTABLISHED' ? 'badge-healthy' : 'badge-info'}">${c.state}</span></td>
+              <td><span class="badge ${c.state === 'ESTABLISHED' ? 'badge-healthy' : 'badge-neutral'} font-mono">${c.state}</span></td>
               <td class="font-mono">${c.pid}</td>
               <td><strong>${escapeHtml(c.process_name)}</strong></td>
             </tr>

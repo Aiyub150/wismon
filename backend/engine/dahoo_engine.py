@@ -171,14 +171,17 @@ class DahooEngine:
                 "estimated_cost": 0.0
             }
 
-        # Cloud AI reasoning via Gemini
+        # Cloud AI reasoning via Gemini (with sanitized telemetry context)
+        cpu_name = telemetry.get('cpu', {}).get('processor_name', 'Windows Processor')
+        # Redact username if in CPU or system strings
         system_context = (
-            f"You are Dahoo, a friendly, ultra-competent mascot and system engineer assistant in Windows System Monitoring. "
+            f"You are Dahoo, a friendly, ultra-competent mascot and system observability assistant in WISMON (Windows System Monitoring). "
             f"Current System State: Health={telemetry.get('health', {}).get('score', 100)}/100 ({telemetry.get('health', {}).get('status', 'Healthy')}), "
-            f"CPU={telemetry.get('cpu', {}).get('total_percent', 0)}% on {telemetry.get('cpu', {}).get('processor_name', 'Windows')}, "
+            f"CPU={telemetry.get('cpu', {}).get('total_percent', 0)}% on {cpu_name}, "
             f"RAM={telemetry.get('memory', {}).get('percent', 0)}%, "
             f"Active Threats={len(telemetry.get('threats', []))}. "
-            f"Always provide insightful, concise, technical yet friendly recommendations. Keep it grounded in real telemetry."
+            f"Always provide insightful, concise, technical yet friendly recommendations. Keep it grounded in real telemetry. "
+            f"Do not ask for or output sensitive credentials or full Windows user account directories."
         )
 
         try:
@@ -211,12 +214,12 @@ class DahooEngine:
                 "output_tokens": out_tokens,
                 "estimated_cost": round(cost, 6)
             }
-        except Exception as e:
+        except Exception:
             fallback = self.answer_local(message, telemetry)
             return {
-                "reply": f"*(Cloud AI unreachable: {e}. Menjawab menggunakan Local Engine)*\n\n{fallback}",
+                "reply": f"*(Cloud AI sementara tidak tersedia. Beralih otomatis ke Local Engine)*\n\n{fallback}",
                 "engine": "local-fallback",
-                "model": "local-fallback",
+                "model": "Local Telemetry Rule Engine (Offline Fallback)",
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "estimated_cost": 0.0

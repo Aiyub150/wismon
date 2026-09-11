@@ -8,6 +8,28 @@ import psutil
 from typing import Dict, Any, List
 from backend.collectors.base import BaseCollector
 
+COMMON_PROCESS_DESCRIPTIONS = {
+    "System Idle Process": "Windows Kernel idle thread measuring available CPU capacity",
+    "System": "NT Kernel & System worker threads",
+    "svchost.exe": "Host Process for Windows Services",
+    "explorer.exe": "Windows Desktop Shell & File Explorer",
+    "dwm.exe": "Desktop Window Manager (UI Rendering)",
+    "csrss.exe": "Client Server Runtime Subsystem",
+    "services.exe": "Windows Service Control Manager",
+    "lsass.exe": "Local Security Authority Subsystem Service",
+    "smss.exe": "Session Manager Subsystem",
+    "Registry": "Windows Registry Storage Process",
+    "spoolsv.exe": "Print Spooler Service",
+    "taskhostw.exe": "Host Process for Windows Tasks",
+    "conhost.exe": "Console Window Host",
+    "RuntimeBroker.exe": "Windows Runtime Broker (App Permissions)",
+    "SearchIndexer.exe": "Windows Search Indexing Service",
+    "python.exe": "Python Interpreter (WISMON Engine)",
+    "msedge.exe": "Microsoft Edge Browser",
+    "chrome.exe": "Google Chrome Browser",
+    "code.exe": "Visual Studio Code"
+}
+
 class ProcessCollector(BaseCollector):
     def __init__(self, interval: float = 2.0):
         super().__init__(name="process", interval=interval)
@@ -67,13 +89,21 @@ class ProcessCollector(BaseCollector):
                     mem_rss = 0
                     mem_vms = 0
 
+                p_name = info.get("name") or f"PID {pid}"
+                is_idle = (pid == 0) or ("idle" in p_name.lower())
+                num_cores = psutil.cpu_count(logical=True) or 1
+                cpu_norm = round(cpu_perc / num_cores, 1)
+
                 processes.append({
                     "pid": pid,
-                    "name": info.get("name") or f"PID {pid}",
+                    "name": p_name,
+                    "description": COMMON_PROCESS_DESCRIPTIONS.get(p_name, "Windows User/System Process"),
                     "path": meta["path"],
                     "username": meta["username"],
                     "status": info.get("status") or "running",
                     "cpu_percent": round(cpu_perc, 1),
+                    "cpu_percent_normalized": cpu_norm,
+                    "is_idle": is_idle,
                     "memory_bytes": mem_rss,
                     "virtual_memory_bytes": mem_vms,
                     "threads": info.get("num_threads") or 1,
@@ -116,10 +146,19 @@ class ProcessCollector(BaseCollector):
         }
 
     def terminate_process(self, pid: int) -> Dict[str, Any]:
-        """Safely terminates a process after explicit confirmation."""
+        """Safely terminates a process after explicit confirmation and safety validation."""
+        if pid in (0, 4):
+            return {"success": False, "message": "Security violation: Windows Core Kernel process cannot be terminated."}
         try:
             p = psutil.Process(pid)
             name = p.name()
+            critical_names = {
+                "system", "system idle process", "smss.exe", "csrss.exe", 
+                "wininit.exe", "services.exe", "lsass.exe", "winlogon.exe"
+            }
+            if name.lower() in critical_names:
+                return {"success": False, "message": f"Security violation: Critical Windows system process '{name}' cannot be terminated."}
+
             p.terminate()
             p.wait(timeout=2)
             return {"success": True, "message": f"Process {name} (PID: {pid}) terminated successfully."}

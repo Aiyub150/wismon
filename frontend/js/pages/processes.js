@@ -42,7 +42,8 @@ class ProcessesPage {
       if (res.ok) {
         const data = await res.json();
         this.processes = data.processes || [];
-        document.getElementById('proc-total-count').textContent = `${this.processes.length} Processes`;
+        const countEl = document.getElementById('proc-total-count');
+        if (countEl) countEl.textContent = `${this.processes.length} Processes`;
         this.applyFilterAndRender();
       }
     } catch (e) {}
@@ -55,7 +56,8 @@ class ProcessesPage {
       list = list.filter(p => 
         p.name.toLowerCase().includes(this.searchTerm) || 
         String(p.pid).includes(this.searchTerm) ||
-        (p.path && p.path.toLowerCase().includes(this.searchTerm))
+        (p.path && p.path.toLowerCase().includes(this.searchTerm)) ||
+        (p.description && p.description.toLowerCase().includes(this.searchTerm))
       );
     }
 
@@ -73,21 +75,39 @@ class ProcessesPage {
     const tbody = document.getElementById('processes-tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = this.filteredProcesses.slice(0, 50).map(p => `
-      <tr>
-        <td class="font-mono text-secondary">${p.pid}</td>
-        <td><strong>${escapeHtml(p.name)}</strong></td>
-        <td class="font-mono text-cyan">${p.cpu_percent}%</td>
-        <td class="font-mono">${(p.memory_bytes / (1024 * 1024)).toFixed(1)} MB</td>
-        <td class="font-mono">${p.threads}</td>
-        <td class="font-mono text-muted">${p.handles}</td>
-        <td class="font-mono text-muted">${p.username}</td>
-        <td>
-          <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" onclick="app.inspectProcess(${p.pid})">Inspect</button>
-          <button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.72rem; margin-left: 4px;" onclick="app.confirmKillProcess(${p.pid}, '${escapeHtml(p.name)}')">End</button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = this.filteredProcesses.slice(0, 60).map(p => {
+      const isIdle = p.is_idle || p.pid === 0 || p.name.toLowerCase().includes('idle');
+      const isProtected = p.pid === 0 || p.pid === 4 || ['smss.exe', 'csrss.exe', 'wininit.exe', 'services.exe', 'lsass.exe'].includes(p.name.toLowerCase());
+      
+      const cpuDisplay = isIdle 
+        ? `${p.cpu_percent_normalized || (p.cpu_percent / 8).toFixed(1)}% <span class="text-muted" style="font-size: 0.65rem;">(Idle)</span>`
+        : `${p.cpu_percent}%`;
+
+      return `
+        <tr>
+          <td class="font-mono text-secondary">${p.pid}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <strong>${escapeHtml(p.name)}</strong>
+              ${isIdle ? '<span class="badge badge-neutral font-mono" style="font-size: 0.65rem;" title="Represents unallocated CPU capacity across all logical cores">Idle Thread</span>' : ''}
+            </div>
+            <div class="text-muted" style="font-size: 0.7rem; margin-top: 1px;">${escapeHtml(p.description || '')}</div>
+          </td>
+          <td class="font-mono ${isIdle ? 'text-secondary' : 'text-cyan'}">${cpuDisplay}</td>
+          <td class="font-mono">${(p.memory_bytes / (1024 * 1024)).toFixed(1)} MB</td>
+          <td class="font-mono">${p.threads}</td>
+          <td class="font-mono text-muted">${p.handles}</td>
+          <td class="font-mono text-muted">${p.username}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" onclick="app.inspectProcess(${p.pid})">Inspect</button>
+            ${isProtected 
+              ? `<button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem; margin-left: 4px; opacity: 0.5;" disabled title="Core system process is protected">Protected</button>`
+              : `<button class="btn btn-danger" style="padding: 2px 8px; font-size: 0.72rem; margin-left: 4px;" onclick="app.confirmKillProcess(${p.pid}, '${escapeHtml(p.name)}')">End</button>`
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 }
 

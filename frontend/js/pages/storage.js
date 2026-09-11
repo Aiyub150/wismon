@@ -1,5 +1,5 @@
 /**
- * Storage Page Controller & Storage Analyzer.
+ * Storage Page Controller & Storage Analyzer with Safe Review Mode.
  */
 
 class StoragePage {
@@ -9,8 +9,9 @@ class StoragePage {
 
   init() {
     this.ioChart = new MiniChart('storage-io-canvas', {
-      color: '#10b981',
-      unit: 'MB/s',
+      color: '#10B981',
+      unit: ' MB/s',
+      label: 'Throughput',
       autoScaleY: true,
       maxPoints: 60
     });
@@ -36,10 +37,15 @@ class StoragePage {
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.2rem;">💾</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+                <line x1="22" x2="2" y1="12" y2="12"/>
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                <line x1="6" x2="6.01" y1="16" y2="16"/>
+                <line x1="10" x2="10.01" y1="16" y2="16"/>
+              </svg>
               <div>
-                <strong style="font-size: 0.95rem;">Drive ${d.device || d.mountpoint}</strong>
-                <div class="text-muted" style="font-size: 0.7rem;">${d.fstype}</div>
+                <strong style="font-size: 0.95rem;">Drive ${escapeHtml(d.device || d.mountpoint)}</strong>
+                <div class="text-muted" style="font-size: 0.7rem;">${d.fstype} • ${d.opts}</div>
               </div>
             </div>
             <span class="badge ${d.percent > 90 ? 'badge-critical' : d.percent > 75 ? 'badge-warning' : 'badge-healthy'}">${d.percent}%</span>
@@ -61,20 +67,25 @@ class StoragePage {
     const readOps = io.read_ops_sec || 0;
     const writeOps = io.write_ops_sec || 0;
 
-    document.getElementById('disk-read-speed').textContent = `${readMb} MB/s`;
-    document.getElementById('disk-write-speed').textContent = `${writeMb} MB/s`;
-    document.getElementById('disk-read-ops').textContent = `${readOps}/s`;
-    document.getElementById('disk-write-ops').textContent = `${writeOps}/s`;
+    const readElem = document.getElementById('disk-read-speed');
+    const writeElem = document.getElementById('disk-write-speed');
+    const readOpsElem = document.getElementById('disk-read-ops');
+    const writeOpsElem = document.getElementById('disk-write-ops');
+
+    if (readElem) readElem.textContent = `${readMb} MB/s`;
+    if (writeElem) writeElem.textContent = `${writeMb} MB/s`;
+    if (readOpsElem) readOpsElem.textContent = `${readOps}/s`;
+    if (writeOpsElem) writeOpsElem.textContent = `${writeOps}/s`;
 
     if (this.ioChart) {
-      const totalMb = parseFloat(readMb) + parseFloat(writeMb);
-      this.ioChart.push(totalMb);
+      const totalMb = parseFloat((parseFloat(readMb) + parseFloat(writeMb)).toFixed(2));
+      const timeStr = snap.timestamp ? new Date(snap.timestamp * 1000).toLocaleTimeString('en-GB') : null;
+      this.ioChart.push(totalMb, timeStr);
     }
   }
 
   async runStorageScan() {
     const btn = document.getElementById('run-storage-scan-btn');
-    const resultBox = document.getElementById('storage-analyzer-results');
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Scanning Storage...';
@@ -105,20 +116,64 @@ class StoragePage {
     const largeFiles = data.large_files || [];
     const oldFiles = data.old_files || [];
 
-    document.getElementById('analyzer-temp-mb').textContent = `${temp.total_mb || 0} MB`;
-    document.getElementById('analyzer-temp-count').textContent = `${temp.file_count || 0} files in Temp`;
-    document.getElementById('analyzer-reclaimable').textContent = `${data.total_reclaimable_estimate_mb || 0} MB`;
+    const tempMb = document.getElementById('analyzer-temp-mb');
+    const tempCount = document.getElementById('analyzer-temp-count');
+    const reclaim = document.getElementById('analyzer-reclaimable');
 
-    // Large files list
+    if (tempMb) tempMb.textContent = `${temp.total_mb || 0} MB`;
+    if (tempCount) tempCount.textContent = `${temp.file_count || 0} files in Temp`;
+    if (reclaim) reclaim.textContent = `${data.total_reclaimable_estimate_mb || 0} MB`;
+
+    // Large files table with Safe Recycle Bin Action
     const largeTbody = document.getElementById('analyzer-large-files-tbody');
     if (largeTbody) {
-      largeTbody.innerHTML = largeFiles.slice(0, 10).map(f => `
-        <tr>
-          <td><strong>${escapeHtml(f.name)}</strong><br><span class="text-muted font-mono" style="font-size: 0.65rem;">${escapeHtml(f.path)}</span></td>
-          <td class="font-mono text-cyan">${f.size_mb} MB</td>
-          <td><span class="badge badge-info">Large File</span></td>
-        </tr>
-      `).join('') || '<tr><td colspan="3" class="text-muted text-center">No files > 100 MB found in scanned user directories.</td></tr>';
+      if (largeFiles.length > 0) {
+        largeTbody.innerHTML = largeFiles.slice(0, 15).map(f => {
+          const encodedPath = encodeURIComponent(f.path);
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 600;">${escapeHtml(f.name)}</div>
+                <div class="text-muted font-mono" style="font-size: 0.65rem; word-break: break-all;">${escapeHtml(f.path)}</div>
+              </td>
+              <td class="font-mono text-cyan">${f.size_mb} MB</td>
+              <td><span class="badge badge-info font-mono">Large File</span></td>
+              <td style="text-align: right;">
+                <button class="btn btn-secondary btn-sm" style="color: #EF4444; border-color: rgba(239, 68, 68, 0.4);" onclick="storagePage.deleteFile('${encodedPath}', '${escapeHtml(f.name)}')">
+                  🗑️ Recycle
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        largeTbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center">No files > 100 MB found in scanned user directories.</td></tr>';
+      }
+    }
+  }
+
+  async deleteFile(encodedPath, filename) {
+    const targetPath = decodeURIComponent(encodedPath);
+    if (!confirm(`Pindahkan file '${filename}' ke Windows Recycle Bin?\n\nFile dapat dipulihkan kembali dari Recycle Bin jika diperlukan.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/analysis/storage/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filepath: targetPath })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`Berhasil: ${data.message}`);
+        this.runStorageScan();
+      } else {
+        alert(`Gagal menghapus: ${data.error || 'Terjadi kesalahan sistem'}`);
+      }
+    } catch (e) {
+      alert(`Gagal menghubungi server: ${e.message}`);
     }
   }
 }

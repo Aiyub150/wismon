@@ -30,7 +30,18 @@ async def trigger_storage_scan():
 async def get_last_storage_scan():
     return storage_analyzer.get_last_scan()
 
+from pydantic import BaseModel, Field
+
+class StorageDeleteRequest(BaseModel):
+    filepath: str = Field(..., description="Absolute path of the file to move to the Windows Recycle Bin")
+
+@router.post("/storage/delete")
+async def delete_storage_file(payload: StorageDeleteRequest):
+    """Safely moves a selected temporary or large file to the Windows Recycle Bin."""
+    return storage_analyzer.move_to_recycle_bin(payload.filepath)
+
 @router.get("/history")
-async def get_telemetry_history(seconds: int = Query(default=3600, ge=60, le=86400)):
+async def get_telemetry_history(seconds: int = Query(default=3600, ge=30, le=86400)):
     """Fetches historical time-series telemetry from SQLite."""
     return await db_manager.get_history(duration_seconds=seconds)
+

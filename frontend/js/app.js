@@ -125,7 +125,7 @@ class App {
 
     // Update active nav-item
     document.querySelectorAll('.nav-item').forEach(el => {
-      const match = el.dataset.page === pageId && (!targetSection || el.dataset.target === targetSection);
+      const match = el.dataset.page === pageId;
       el.classList.toggle('active', match);
     });
 
@@ -145,12 +145,17 @@ class App {
         'network': 'Network & Sockets Explorer',
         'processes': 'Process Explorer',
         'services': 'Windows Services',
-        'security': 'Threat Center & Security Intelligence',
-        'hardware': 'Hardware & GPU Sensors',
-        'analysis': 'Statistical Telemetry Analysis'
+        'security': 'Security Events & Threat Intelligence',
+        'hardware': 'GPU & Hardware Sensors',
+        'analysis': 'Performance & Historical Analysis'
       };
       titleEl.textContent = pageNames[pageId] || pageId.toUpperCase();
     }
+
+    // Trigger canvas resize so newly visible charts calculate actual container widths
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 40);
 
     // Scroll viewport or target section
     const viewport = document.getElementById('content-viewport');
@@ -163,7 +168,7 @@ class App {
           } else {
             viewport.scrollTop = 0;
           }
-        }, 50);
+        }, 60);
       } else {
         viewport.scrollTop = 0;
       }
@@ -237,7 +242,13 @@ class App {
   }
 
   async mitigateThreat(threatId, action) {
-    if (!confirm(`Are you sure you want to perform action '${action}' on this threat event?`)) {
+    const actionLabel = action === 'TERMINATE_PROCESS' 
+      ? 'Hentikan proses yang memicu ancaman ini' 
+      : action === 'FALSE_POSITIVE' 
+      ? 'Tandai ancaman sebagai False Positive (Aman)' 
+      : 'Tandai ancaman sebagai Selesai / Resolved';
+
+    if (!confirm(`Konfirmasi Tindakan:\n${actionLabel}?\n\nPerubahan status akan dicatat dalam audit log.`)) {
       return;
     }
     try {
@@ -248,13 +259,13 @@ class App {
       });
       const data = await res.json();
       if (res.ok) {
-        this.showToast('success', data.message);
+        this.showToast('success', data.message || 'Tindakan keamanan berhasil dieksekusi.');
         if (window.securityPage) window.securityPage.fetchEventHistory();
       } else {
-        this.showToast('danger', data.detail || 'Mitigation failed.');
+        this.showToast('danger', data.detail || 'Tindakan gagal dijalankan.');
       }
     } catch (e) {
-      this.showToast('danger', 'Error: ' + e.message);
+      this.showToast('danger', 'Error komunikasi: ' + e.message);
     }
   }
 

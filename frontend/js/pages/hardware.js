@@ -1,5 +1,5 @@
 /**
- * Hardware, GPU, Battery & Platform Page Controller.
+ * Hardware, Multi-GPU, Battery & Platform Page Controller.
  */
 
 class HardwarePage {
@@ -17,26 +17,69 @@ class HardwarePage {
     const battery = hw.battery || {};
     const thermal = hw.thermal || {};
 
-    // 1. GPU Card
-    const gpuNameEl = document.getElementById('hw-gpu-name');
-    const gpuUsageEl = document.getElementById('hw-gpu-usage');
-    const gpuVramEl = document.getElementById('hw-gpu-vram');
-    const gpuTempEl = document.getElementById('hw-gpu-temp');
-    const gpuStatusEl = document.getElementById('hw-gpu-status');
+    // 1. Dynamic Multi-GPU Rendering (Intel, AMD, NVIDIA)
+    const gpuContainer = document.getElementById('hw-gpus-container') || document.getElementById('hw-gpu-card');
+    const gpusList = gpu.gpus || [];
 
-    if (gpuNameEl) gpuNameEl.textContent = gpu.name || 'Unavailable';
-    if (gpuUsageEl) gpuUsageEl.textContent = gpu.usage_percent !== null && gpu.usage_percent !== undefined ? `${gpu.usage_percent}%` : 'Unavailable';
-    if (gpuVramEl) {
-      if (gpu.vram_total_bytes) {
-        const totalMb = (gpu.vram_total_bytes / (1024**2)).toFixed(0);
-        const usedMb = gpu.vram_used_bytes ? (gpu.vram_used_bytes / (1024**2)).toFixed(0) : '—';
-        gpuVramEl.textContent = `${usedMb} / ${totalMb} MB`;
+    if (gpuContainer) {
+      if (gpusList.length > 0) {
+        gpuContainer.innerHTML = gpusList.map(g => {
+          const vramTotalMb = g.vram_total_bytes ? (g.vram_total_bytes / (1024**2)).toFixed(0) : '—';
+          const vramUsedMb = g.vram_used_bytes ? (g.vram_used_bytes / (1024**2)).toFixed(0) : '—';
+          const utilVal = g.usage_percent !== null && g.usage_percent !== undefined ? g.usage_percent : 0;
+          const tempVal = g.temperature_c !== null && g.temperature_c !== undefined ? `${g.temperature_c}°C` : 'Sensor unavailable';
+
+          const vendorBadge = g.vendor === 'NVIDIA' ? 'badge-healthy' : g.vendor === 'Intel' ? 'badge-info' : 'badge-primary';
+
+          return `
+            <div class="card" style="margin-bottom: 1rem;">
+              <div class="card-header" style="margin-bottom: 0.8rem; padding-bottom: 0.6rem;">
+                <div class="card-title">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+                    <rect width="20" height="14" x="2" y="3" rx="2"/>
+                    <line x1="8" x2="16" y1="21" y2="21"/>
+                    <line x1="12" x2="12" y1="17" y2="21"/>
+                  </svg>
+                  <span>${escapeHtml(g.name)}</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <span class="badge ${vendorBadge} font-mono">${g.vendor}</span>
+                  <span class="badge badge-neutral font-mono">${g.is_discrete ? 'Discrete' : 'Integrated'}</span>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <div class="text-muted" style="font-size: 0.75rem;">Engine Utilization (3D)</div>
+                  <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-display); color: var(--color-primary);">${utilVal}%</div>
+                  <div class="progress-container" style="height: 6px; margin-top: 0.4rem;">
+                    <div class="progress-bar ${utilVal > 80 ? 'critical' : utilVal > 50 ? 'warning' : ''}" style="width: ${Math.min(100, utilVal)}%;"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="text-muted" style="font-size: 0.75rem;">Graphics Memory (VRAM)</div>
+                  <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono);">${vramUsedMb} / ${vramTotalMb} MB</div>
+                  <div class="text-muted font-mono" style="font-size: 0.7rem; margin-top: 0.2rem;">${escapeHtml(g.vram_type || 'DirectX Shared / Dedicated')}</div>
+                </div>
+
+                <div>
+                  <div class="text-muted" style="font-size: 0.75rem;">Temperature & Thermals</div>
+                  <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary);">${tempVal}</div>
+                  <div class="text-muted" style="font-size: 0.7rem; margin-top: 0.2rem;">Driver: ${escapeHtml(g.driver_version || 'WDDM Driver')}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
       } else {
-        gpuVramEl.textContent = 'Unavailable';
+        gpuContainer.innerHTML = `
+          <div class="card">
+            <div class="text-muted text-center" style="padding: 1.5rem;">No graphics processing units detected.</div>
+          </div>
+        `;
       }
     }
-    if (gpuTempEl) gpuTempEl.textContent = gpu.temperature_c !== null && gpu.temperature_c !== undefined ? `${gpu.temperature_c}°C` : 'Unavailable';
-    if (gpuStatusEl) gpuStatusEl.textContent = gpu.status || 'Unavailable';
 
     // 2. Battery Card
     const batPercentEl = document.getElementById('hw-battery-percent');
@@ -69,15 +112,21 @@ class HardwarePage {
     }
 
     // 4. System Platform Info
-    document.getElementById('hw-sys-os').textContent = `${sys.system || 'Windows'} ${sys.release || ''} (Build ${sys.version || ''})`;
-    document.getElementById('hw-sys-arch').textContent = sys.architecture || 'x86_64';
-    document.getElementById('hw-sys-proc').textContent = sys.processor || 'Central Processor';
-    document.getElementById('hw-sys-host').textContent = sys.hostname || 'localhost';
+    const osEl = document.getElementById('hw-sys-os');
+    const archEl = document.getElementById('hw-sys-arch');
+    const procEl = document.getElementById('hw-sys-proc');
+    const hostEl = document.getElementById('hw-sys-host');
+    const uptimeEl = document.getElementById('hw-sys-uptime');
+
+    if (osEl) osEl.textContent = `${sys.system || 'Windows'} ${sys.release || ''} (Build ${sys.version || ''})`;
+    if (archEl) archEl.textContent = sys.architecture || 'x86_64';
+    if (procEl) procEl.textContent = sys.processor || 'Central Processor';
+    if (hostEl) hostEl.textContent = sys.hostname || 'localhost';
 
     const uptimeSec = hw.uptime_seconds || 0;
     const hours = Math.floor(uptimeSec / 3600);
     const mins = Math.floor((uptimeSec % 3600) / 60);
-    document.getElementById('hw-sys-uptime').textContent = `${hours} hours, ${mins} minutes`;
+    if (uptimeEl) uptimeEl.textContent = `${hours} hours, ${mins} minutes`;
   }
 }
 

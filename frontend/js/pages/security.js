@@ -18,7 +18,10 @@ class SecurityPage {
   renderThreats() {
     const container = document.getElementById('security-threats-container');
     const badge = document.getElementById('security-threat-badge');
-    if (badge) badge.textContent = `${this.threats.length} Active`;
+    if (badge) {
+      badge.textContent = `${this.threats.length} Active`;
+      badge.className = this.threats.length > 0 ? 'badge badge-critical font-mono' : 'badge badge-healthy font-mono';
+    }
 
     if (!container) return;
 
@@ -40,7 +43,7 @@ class SecurityPage {
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
             <div>
               <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                <span class="badge ${badgeClass}">${t.severity}</span>
+                <span class="badge ${badgeClass} font-mono">${t.severity}</span>
                 <strong style="font-size: 1rem;">${escapeHtml(t.category)}</strong>
               </div>
               <div class="text-muted font-mono" style="font-size: 0.75rem;">Target: <span class="text-primary">${escapeHtml(t.target)}</span> | Source: ${escapeHtml(t.source)}</div>
@@ -50,25 +53,25 @@ class SecurityPage {
 
           <p style="font-size: 0.85rem; margin-bottom: 0.6rem;">${escapeHtml(t.reason)}</p>
 
-          <div class="card" style="background: rgba(0,0,0,0.3); padding: 0.6rem; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          <div class="card" style="background: var(--bg-body); padding: 0.6rem; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
             <strong>Evidence:</strong> ${escapeHtml(t.evidence)}
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
-            <div style="font-size: 0.78rem; color: var(--accent-cyan);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-size: 0.78rem; color: var(--color-primary);">
               💡 <strong>Recommendation:</strong> ${escapeHtml(t.recommended_action)}
             </div>
             <div style="display: flex; gap: 0.5rem;">
               ${t.pid ? `
-                <button class="btn btn-danger" style="font-size: 0.75rem;" onclick="app.mitigateThreat('${t.id}', 'TERMINATE_PROCESS')">
+                <button class="btn btn-danger btn-sm" onclick="app.mitigateThreat('${t.id}', 'TERMINATE_PROCESS')">
                   Terminate Process
                 </button>
               ` : ''}
-              <button class="btn btn-secondary" style="font-size: 0.75rem;" onclick="app.mitigateThreat('${t.id}', 'RESOLVE')">
-                Resolve
+              <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'RESOLVE')">
+                Mark as Resolved
               </button>
-              <button class="btn btn-secondary" style="font-size: 0.75rem;" onclick="app.mitigateThreat('${t.id}', 'FALSE_POSITIVE')">
-                False Positive
+              <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'FALSE_POSITIVE')">
+                Mark as False Positive
               </button>
             </div>
           </div>
@@ -88,10 +91,10 @@ class SecurityPage {
             <tr>
               <td class="font-mono text-muted">${new Date(e.timestamp * 1000).toLocaleTimeString()}</td>
               <td><strong>${escapeHtml(e.category)}</strong></td>
-              <td><span class="badge ${e.severity === 'CRITICAL' ? 'badge-critical' : 'badge-warning'}">${e.severity}</span></td>
+              <td><span class="badge ${e.severity === 'CRITICAL' ? 'badge-critical' : 'badge-warning'} font-mono">${e.severity}</span></td>
               <td>${escapeHtml(e.target || '—')}</td>
-              <td><span class="badge badge-healthy">${e.status}</span></td>
-              <td class="text-secondary" style="font-size: 0.75rem;">${escapeHtml(e.action_taken || 'No action recorded')}</td>
+              <td><span class="badge badge-healthy font-mono">${e.status}</span></td>
+              <td class="text-secondary" style="font-size: 0.75rem;">${escapeHtml(e.action_taken || 'Status acknowledged by administrator')}</td>
             </tr>
           `).join('') || '<tr><td colspan="6" class="text-muted text-center">No historical threat events recorded in database yet.</td></tr>';
         }

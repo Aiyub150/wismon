@@ -27,7 +27,11 @@ class ThreatCenter:
         new_events = []
 
         # Rule 1: High CPU Outlier (process consuming > 75% for an extended duration)
-        for proc in processes[:3]:
+        for proc in processes[:5]:
+            pid = proc.get("pid", -1)
+            name = proc.get("name", "").lower()
+            if pid <= 0 or "idle" in name or "system idle" in name:
+                continue
             if proc.get("cpu_percent", 0) > 75.0:
                 threat_id = f"high_cpu_{proc['pid']}"
                 if threat_id not in self._active_threats:

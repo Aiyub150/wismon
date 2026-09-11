@@ -106,9 +106,64 @@ class StorageAnalyzer:
         self._last_scan = result
         return result
 
+    def move_to_recycle_bin(self, filepath: str) -> Dict[str, Any]:
+        """
+        Safely moves a target file to the Windows Recycle Bin (with full undo support).
+        Enforces strict guardrails preventing modification of system or critical directories.
+        """
+        import ctypes
+        from ctypes import wintypes
+
+        class SHFILEOPSTRUCTW(ctypes.Structure):
+            _fields_ = [
+                ('hwnd', wintypes.HWND),
+                ('wFunc', wintypes.UINT),
+                ('pFrom', wintypes.LPCWSTR),
+                ('pTo', wintypes.LPCWSTR),
+                ('fFlags', wintypes.WORD),
+                ('fAnyOperationsAborted', wintypes.BOOL),
+                ('hNameMappings', wintypes.LPVOID),
+                ('lpszProgressTitle', wintypes.LPCWSTR),
+            ]
+
+        p = Path(filepath).resolve()
+        if not p.exists() or not p.is_file():
+            return {"success": False, "error": "File does not exist or is not a regular file."}
+
+        # Guardrails: Forbid deleting Windows, Program Files, system root files
+        p_str = str(p).lower()
+        forbidden_prefixes = [
+            os.environ.get("WINDIR", "C:\\Windows").lower(),
+            os.environ.get("ProgramFiles", "C:\\Program Files").lower(),
+            os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)").lower(),
+            os.environ.get("SystemRoot", "C:\\Windows").lower()
+        ]
+        if any(p_str.startswith(f) for f in forbidden_prefixes if f):
+            return {"success": False, "error": "Security violation: Cannot delete operating system or program files."}
+
+        # Double check root drives
+        if p.parent == p.anchor or len(p.parts) <= 2:
+            return {"success": False, "error": "Security violation: Root-level drive files cannot be deleted."}
+
+        try:
+            # Path must be double-null terminated for SHFileOperationW
+            p_from = str(p) + '\0\0'
+            op = SHFILEOPSTRUCTW()
+            op.wFunc = 0x0003 # FO_DELETE
+            op.pFrom = p_from
+            op.fFlags = 0x0040 | 0x0010 | 0x0004 # FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT
+            res = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+            if res == 0 and not p.exists():
+                return {"success": True, "message": f"Successfully moved '{p.name}' to the Windows Recycle Bin."}
+            else:
+                return {"success": False, "error": f"Failed to recycle file (code {res})."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def get_last_scan(self) -> Dict[str, Any]:
         if not self._last_scan:
             return self.scan()
         return self._last_scan
 
 storage_analyzer = StorageAnalyzer()
+

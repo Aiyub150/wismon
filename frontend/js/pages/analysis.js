@@ -9,8 +9,9 @@ class AnalysisPage {
 
   init() {
     this.histChart = new MiniChart('analysis-history-canvas', {
-      color: '#06b6d4',
+      color: '#3C50E0',
       unit: '%',
+      label: 'CPU Load',
       maxY: 100,
       maxPoints: 120
     });
@@ -23,7 +24,7 @@ class AnalysisPage {
       btn.addEventListener('click', () => {
         rangeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const sec = parseInt(btn.dataset.seconds, 10);
+        const sec = parseInt(btn.dataset.seconds, 10) || 3600;
         this.fetchHistory(sec);
       });
     });
@@ -38,26 +39,42 @@ class AnalysisPage {
         const ram = data.ram || {};
         const net = data.network_mbps || {};
 
-        document.getElementById('base-cpu-minmax').textContent = `${cpu.min}–${cpu.max}%`;
-        document.getElementById('base-cpu-avg').textContent = `${cpu.avg}%`;
+        const setVal = (id, val) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = val;
+        };
 
-        document.getElementById('base-ram-minmax').textContent = `${ram.min}–${ram.max}%`;
-        document.getElementById('base-ram-avg').textContent = `${ram.avg}%`;
+        setVal('base-cpu-minmax', `${cpu.min || 0}–${cpu.max || 0}%`);
+        setVal('base-cpu-avg', `${cpu.avg || 0}%`);
 
-        document.getElementById('base-net-minmax').textContent = `${net.min}–${net.max} Mbps`;
-        document.getElementById('base-net-avg').textContent = `${net.avg} Mbps`;
+        setVal('base-ram-minmax', `${ram.min || 0}–${ram.max || 0}%`);
+        setVal('base-ram-avg', `${ram.avg || 0}%`);
+
+        setVal('base-net-minmax', `${net.min || 0}–${net.max || 0} Mbps`);
+        setVal('base-net-avg', `${net.avg || 0} Mbps`);
       }
     } catch (e) {}
   }
 
   async fetchHistory(seconds) {
+    const emptyNotice = document.getElementById('hist-empty-notice');
     try {
       const res = await fetch(`/api/analysis/history?seconds=${seconds}`);
       if (res.ok) {
         const records = await res.json();
-        if (this.histChart && records.length > 0) {
-          this.histChart.dataPoints = records.map(r => r.cpu_percent);
-          this.histChart.render();
+        if (this.histChart) {
+          if (records.length > 0) {
+            this.histChart.dataPoints = records.map(r => ({
+              val: r.cpu_percent,
+              timeStr: new Date(r.timestamp * 1000).toLocaleTimeString('en-GB'),
+              timestamp: r.timestamp * 1000
+            }));
+            this.histChart.resize();
+            this.histChart.render();
+            if (emptyNotice) emptyNotice.style.display = 'none';
+          } else {
+            if (emptyNotice) emptyNotice.style.display = 'block';
+          }
         }
 
         // Summary stats for period
@@ -67,9 +84,13 @@ class AnalysisPage {
           const avgCpu = (cpus.reduce((a, b) => a + b, 0) / cpus.length).toFixed(1);
           const avgRam = (rams.reduce((a, b) => a + b, 0) / rams.length).toFixed(1);
 
-          document.getElementById('hist-avg-cpu').textContent = `${avgCpu}%`;
-          document.getElementById('hist-avg-ram').textContent = `${avgRam}%`;
-          document.getElementById('hist-samples-count').textContent = records.length;
+          const elCpu = document.getElementById('hist-avg-cpu');
+          const elRam = document.getElementById('hist-avg-ram');
+          const elCount = document.getElementById('hist-samples-count');
+
+          if (elCpu) elCpu.textContent = `${avgCpu}%`;
+          if (elRam) elRam.textContent = `${avgRam}%`;
+          if (elCount) elCount.textContent = `${records.length} samples`;
         }
       }
     } catch (e) {}
