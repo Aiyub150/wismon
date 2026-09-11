@@ -20,13 +20,14 @@ def main():
     port = 8080
 
     print("=======================================")
-    print(" Windows System Monitoring")
+    print(" WISMON — Windows System Monitoring")
+    print(" Monitor. Analyze. Understand.")
     print("=======================================")
     print()
     print(f"Backend : http://{host}:{port}")
     print(f"Frontend: http://{host}:{port}")
     print()
-    print("Monitoring: ONLINE")
+    print("Monitoring: ONLINE (SSE Stream Active)")
     print()
     print(f"CPU     : {cpu_initial}%")
     print(f"Memory  : {ram_initial}%")

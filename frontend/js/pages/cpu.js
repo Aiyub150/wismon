@@ -17,7 +17,11 @@ class CPUPage {
 
     window.addEventListener('telemetry-update', (e) => this.update(e.detail));
     this.fetchWorkloadAnalysis();
-    setInterval(() => this.fetchWorkloadAnalysis(), 5000);
+    setInterval(() => {
+      if (window.app && window.app.currentPage === 'cpu') {
+        this.fetchWorkloadAnalysis();
+      }
+    }, 6000);
   }
 
   update(snap) {

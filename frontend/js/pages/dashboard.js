@@ -10,12 +10,12 @@ class DashboardPage {
 
   init() {
     this.cpuChart = new MiniChart('dash-cpu-canvas', {
-      color: '#06b6d4',
+      color: '#3C50E0',
       unit: '%',
       maxY: 100
     });
     this.memChart = new MiniChart('dash-mem-canvas', {
-      color: '#6366f1',
+      color: '#259AE6',
       unit: '%',
       maxY: 100
     });

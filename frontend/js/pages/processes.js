@@ -29,7 +29,11 @@ class ProcessesPage {
     }
 
     this.fetchProcesses();
-    setInterval(() => this.fetchProcesses(), 3000);
+    setInterval(() => {
+      if (window.app && window.app.currentPage === 'processes') {
+        this.fetchProcesses();
+      }
+    }, 4000);
   }
 
   async fetchProcesses() {

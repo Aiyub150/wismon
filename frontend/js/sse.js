@@ -11,13 +11,13 @@ class TelemetryStream {
   }
 
   connect() {
-    this.updateStatus('connecting', 'Connecting...');
+    this.updateStatus('connecting', 'CONNECTING');
     try {
       this.eventSource = new EventSource(this.endpoint);
 
       this.eventSource.onopen = () => {
         this.reconnectAttempts = 0;
-        this.updateStatus('online', 'Online (SSE)');
+        this.updateStatus('online', 'LIVE');
       };
 
       this.eventSource.onmessage = (event) => {
@@ -32,14 +32,18 @@ class TelemetryStream {
       };
 
       this.eventSource.onerror = () => {
-        this.updateStatus('offline', 'Reconnecting...');
         this.eventSource.close();
-        const timeout = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
+        if (this.reconnectAttempts > 8) {
+          this.updateStatus('offline', 'OFFLINE');
+        } else {
+          this.updateStatus('reconnecting', 'RECONNECTING');
+        }
+        const timeout = Math.min(1000 * Math.pow(1.3, this.reconnectAttempts), 8000);
         this.reconnectAttempts++;
         setTimeout(() => this.connect(), timeout);
       };
     } catch (e) {
-      this.updateStatus('offline', 'Error');
+      this.updateStatus('offline', 'OFFLINE');
     }
   }
 

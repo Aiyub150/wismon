@@ -1,6 +1,6 @@
 /**
- * Main Application Orchestrator for Windows System Monitoring.
- * Handles client-side navigation, global modals, search palette, and notifications.
+ * Main Application Orchestrator for WISMON (Windows System Monitoring).
+ * Handles client-side navigation, theme switching, global modals, and search palette.
  */
 
 class App {
@@ -14,16 +14,31 @@ class App {
   }
 
   init() {
-    // 1. Navigation setup
+    // 1. Theme setup (TailAdmin Dark/Light mode)
+    this.initTheme();
+
+    // 2. Navigation setup
     document.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', (e) => {
         e.preventDefault();
         const page = item.dataset.page;
-        if (page) this.navigate(page);
+        const target = item.dataset.target;
+        if (page) {
+          this.navigate(page, target);
+        }
       });
     });
 
-    // 2. Global search shortcut (Ctrl+K)
+    // Nav Dahoo trigger
+    const navDahoo = document.getElementById('nav-dahoo-btn');
+    if (navDahoo) {
+      navDahoo.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.dahooAssistant) window.dahooAssistant.toggleDrawer(true);
+      });
+    }
+
+    // 3. Global search shortcut (Ctrl+K)
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -70,7 +85,7 @@ class App {
     // Start SSE stream
     if (window.telemetryStream) window.telemetryStream.connect();
 
-    // Listen for threats to show notification toasts
+    // Listen for threats to show notification badge
     window.addEventListener('telemetry-update', (e) => {
       const snap = e.detail;
       const threats = snap.threats || [];
@@ -85,15 +100,33 @@ class App {
       }
     });
 
-    console.log("Windows System Monitoring UI initialized.");
+    console.log("WISMON — Windows System Monitoring UI initialized.");
   }
 
-  navigate(pageId) {
+  initTheme() {
+    const savedTheme = localStorage.getItem('wismon-theme') || 'dark';
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
+    const toggleBtn = document.getElementById('theme-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('wismon-theme', isDark ? 'dark' : 'light');
+      });
+    }
+  }
+
+  navigate(pageId, targetSection = null) {
     this.currentPage = pageId;
 
     // Update active nav-item
     document.querySelectorAll('.nav-item').forEach(el => {
-      el.classList.toggle('active', el.dataset.page === pageId);
+      const match = el.dataset.page === pageId && (!targetSection || el.dataset.target === targetSection);
+      el.classList.toggle('active', match);
     });
 
     // Update active view
@@ -105,23 +138,36 @@ class App {
     const titleEl = document.getElementById('topbar-page-title');
     if (titleEl) {
       const pageNames = {
-        'dashboard': 'System Overview',
-        'cpu': 'CPU Monitoring',
-        'memory': 'Memory Architecture',
-        'storage': 'Storage & I/O Analytics',
-        'network': 'Network & Sockets',
+        'dashboard': 'Dashboard Overview',
+        'cpu': 'CPU Telemetry & Diagnostics',
+        'memory': 'Physical RAM & Kernel Memory',
+        'storage': 'Storage & Disk I/O Analytics',
+        'network': 'Network & Sockets Explorer',
         'processes': 'Process Explorer',
         'services': 'Windows Services',
-        'security': 'Security & Threat Center',
-        'hardware': 'Hardware & Sensors',
-        'analysis': 'Telemetry Analysis'
+        'security': 'Threat Center & Security Intelligence',
+        'hardware': 'Hardware & GPU Sensors',
+        'analysis': 'Statistical Telemetry Analysis'
       };
       titleEl.textContent = pageNames[pageId] || pageId.toUpperCase();
     }
 
-    // Scroll viewport to top
+    // Scroll viewport or target section
     const viewport = document.getElementById('content-viewport');
-    if (viewport) viewport.scrollTop = 0;
+    if (viewport) {
+      if (targetSection) {
+        setTimeout(() => {
+          const targetEl = document.getElementById(`section-${targetSection}`);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            viewport.scrollTop = 0;
+          }
+        }, 50);
+      } else {
+        viewport.scrollTop = 0;
+      }
+    }
   }
 
   // --- Modal Operations ---
@@ -233,25 +279,27 @@ class App {
     if (!resultsContainer) return;
 
     const pages = [
-      { name: 'Dashboard Overview', page: 'dashboard', icon: '📊' },
-      { name: 'CPU Monitoring', page: 'cpu', icon: '⚡' },
-      { name: 'Memory & Pools', page: 'memory', icon: '🧠' },
-      { name: 'Storage & I/O Analytics', page: 'storage', icon: '💾' },
-      { name: 'Network & Sockets', page: 'network', icon: '🌐' },
-      { name: 'Process Explorer', page: 'processes', icon: '⚙️' },
-      { name: 'Windows Services', page: 'services', icon: '🔧' },
-      { name: 'Threat Center', page: 'security', icon: '🛡️' },
-      { name: 'Hardware & GPU', page: 'hardware', icon: '🖥️' },
-      { name: 'Telemetry Analysis & History', page: 'analysis', icon: '📈' },
+      { name: 'Dashboard Overview', page: 'dashboard', category: 'Overview' },
+      { name: 'CPU Telemetry & Cores', page: 'cpu', category: 'System' },
+      { name: 'Physical RAM & Kernel Pools', page: 'memory', category: 'System' },
+      { name: 'GPU & Graphics Hardware', page: 'hardware', category: 'System', target: 'gpu' },
+      { name: 'Storage Drives & I/O', page: 'storage', category: 'System' },
+      { name: 'Network Interfaces & Speed', page: 'network', category: 'System' },
+      { name: 'Process Explorer', page: 'processes', category: 'Activity' },
+      { name: 'Windows Services & svchost', page: 'services', category: 'Activity' },
+      { name: 'Connections & Sockets Explorer', page: 'network', category: 'Activity', target: 'sockets' },
+      { name: 'Threat Center', page: 'security', category: 'Security' },
+      { name: 'Security Events Log', page: 'security', category: 'Security', target: 'events' },
+      { name: 'Storage Analyzer', page: 'storage', category: 'Analysis', target: 'analyzer' },
+      { name: 'Statistical Telemetry Analysis', page: 'analysis', category: 'Analysis' }
     ];
 
-    const matchedPages = pages.filter(p => p.name.toLowerCase().includes(q));
+    const matched = pages.filter(p => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
 
-    resultsContainer.innerHTML = matchedPages.map(p => `
-      <div class="palette-item" onclick="app.navigate('${p.page}'); app.toggleSearchModal(false);" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.85rem; border-radius: 8px; cursor: pointer; transition: background 0.15s;">
-        <span style="font-size: 1.1rem;">${p.icon}</span>
-        <strong>${p.name}</strong>
-        <span class="text-muted" style="margin-left: auto; font-size: 0.7rem; font-family: monospace;">Page</span>
+    resultsContainer.innerHTML = matched.map(p => `
+      <div class="palette-item" onclick="app.navigate('${p.page}', '${p.target || ''}'); app.toggleSearchModal(false);" style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.85rem; border-radius: var(--radius-md); cursor: pointer; border-bottom: 1px solid var(--border-subtle);">
+        <strong style="color: var(--text-primary); font-size: 0.875rem;">${p.name}</strong>
+        <span class="badge badge-neutral" style="font-size: 0.7rem;">${p.category}</span>
       </div>
     `).join('') || '<div class="text-muted text-center" style="padding: 1rem;">No matching pages or items.</div>';
   }
@@ -260,11 +308,11 @@ class App {
     const toast = document.createElement('div');
     toast.className = `badge badge-${type === 'success' ? 'healthy' : 'critical'}`;
     toast.style.position = 'fixed';
-    toast.style.bottom = '90px';
+    toast.style.bottom = '85px';
     toast.style.right = '24px';
     toast.style.zIndex = '999';
-    toast.style.padding = '0.75rem 1.25rem';
-    toast.style.fontSize = '0.85rem';
+    toast.style.padding = '0.65rem 1.1rem';
+    toast.style.fontSize = '0.8125rem';
     toast.style.boxShadow = 'var(--shadow-lg)';
     toast.textContent = message;
     document.body.appendChild(toast);

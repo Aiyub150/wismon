@@ -17,7 +17,11 @@ class NetworkPage {
 
     window.addEventListener('telemetry-update', (e) => this.update(e.detail));
     this.fetchSockets();
-    setInterval(() => this.fetchSockets(), 4000);
+    setInterval(() => {
+      if (window.app && window.app.currentPage === 'network') {
+        this.fetchSockets();
+      }
+    }, 5000);
   }
 
   update(snap) {

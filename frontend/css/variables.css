@@ -1,59 +1,120 @@
-/* Modern Design System Tokens for Windows System Monitoring */
+/* TailAdmin Design System Tokens for WISMON (Windows System Monitoring) */
+
 :root {
-  /* Color Palette - Deep Dark Tech Slate */
-  --bg-base: #07090e;
-  --bg-surface: #0e131f;
-  --bg-card: rgba(18, 24, 38, 0.75);
-  --bg-card-hover: rgba(26, 35, 56, 0.85);
-  --bg-glass: rgba(15, 22, 36, 0.65);
-  --bg-input: #121826;
-  
-  /* Borders & Dividers */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-focus: rgba(6, 182, 212, 0.5);
-  --border-card: rgba(255, 255, 255, 0.08);
+  /* TailAdmin Light Theme (Default / Root Tokens) */
+  --bg-body: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+  --bg-header: #FFFFFF;
+  --bg-sidebar: #1C2434;
+  --bg-sidebar-active: #333A48;
+  --bg-sidebar-hover: #263143;
+  --bg-input: #F8FAFC;
+  --bg-badge-neutral: #E2E8F0;
 
-  /* Brand Accents */
-  --accent-cyan: #06b6d4;
-  --accent-cyan-glow: rgba(6, 182, 212, 0.25);
-  --accent-indigo: #6366f1;
-  --accent-purple: #8b5cf6;
-  --accent-emerald: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-rose: #f43f5e;
-
-  /* Status Colors */
-  --status-healthy: #10b981;
-  --status-normal: #06b6d4;
-  --status-warning: #f59e0b;
-  --status-critical: #f43f5e;
+  /* Borders */
+  --border-color: #E2E8F0;
+  --border-subtle: #EDF2F7;
+  --border-card: #E2E8F0;
+  --border-focus: #3C50E0;
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: 'Outfit', 'Inter', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   /* Text Colors */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-inverse: #0f172a;
+  --text-primary: #1C2434;
+  --text-secondary: #64748B;
+  --text-muted: #8A99AD;
+  --text-sidebar: #DEE4EE;
+  --text-sidebar-muted: #8A99AD;
+  --text-sidebar-active: #FFFFFF;
 
-  /* Shadows & Glass Effects */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 0 20px -3px var(--accent-cyan-glow);
-  --backdrop-blur: blur(16px);
+  /* TailAdmin Brand Accents */
+  --color-primary: #3C50E0;
+  --color-primary-hover: #2F40BD;
+  --color-primary-light: #EBEEFC;
 
-  /* Sizing & Transitions */
-  --sidebar-width: 250px;
-  --sidebar-collapsed-width: 72px;
-  --topbar-height: 64px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-full: 9999px;
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Semantic Status Colors */
+  --status-healthy: #10B981;
+  --status-healthy-bg: #ECFDF5;
+  --status-healthy-text: #047857;
+
+  --status-normal: #259AE6;
+  --status-normal-bg: #EFF6FF;
+  --status-normal-text: #1D4ED8;
+
+  --status-warning: #F0950C;
+  --status-warning-bg: #FFFBEB;
+  --status-warning-text: #B45309;
+
+  --status-critical: #D34053;
+  --status-critical-bg: #FEF2F2;
+  --status-critical-text: #B91C1C;
+
+  /* Shadows (Subtle, professional TailAdmin shadows) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+
+  /* Geometry */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 9999px;
+
+  /* Dimensions */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 76px;
+  --header-height: 64px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease-in-out;
+  --transition-normal: 0.2s ease-in-out;
+}
+
+/* TailAdmin Dark Theme */
+html.dark, body.dark {
+  --bg-body: #1A222C;
+  --bg-card: #24303F;
+  --bg-card-hover: #293647;
+  --bg-header: #24303F;
+  --bg-sidebar: #1C2434;
+  --bg-sidebar-active: #333A48;
+  --bg-sidebar-hover: #263143;
+  --bg-input: #1D2A3A;
+  --bg-badge-neutral: #313D4A;
+
+  --border-color: #2E3A47;
+  --border-subtle: #2A3644;
+  --border-card: #2E3A47;
+  --border-focus: #3C50E0;
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #DEE4EE;
+  --text-muted: #8A99AD;
+  --text-sidebar: #DEE4EE;
+  --text-sidebar-muted: #8A99AD;
+  --text-sidebar-active: #FFFFFF;
+
+  --color-primary-light: rgba(60, 80, 224, 0.15);
+
+  --status-healthy-bg: rgba(16, 185, 129, 0.15);
+  --status-healthy-text: #34D399;
+
+  --status-normal-bg: rgba(37, 154, 230, 0.15);
+  --status-normal-text: #60A5FA;
+
+  --status-warning-bg: rgba(240, 149, 12, 0.15);
+  --status-warning-text: #FBBF24;
+
+  --status-critical-bg: rgba(211, 64, 83, 0.18);
+  --status-critical-text: #F87171;
+
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.45);
 }

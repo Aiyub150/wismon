@@ -64,8 +64,9 @@ class MiniChart {
       maxY = Math.max(maxVal * 1.2, 10);
     }
 
-    // Draw Subtle Horizontal Gridlines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    // Dynamic gridline color based on theme
+    const isDark = document.documentElement.classList.contains('dark');
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)';
     ctx.lineWidth = 1;
     const gridSteps = 4;
     for (let i = 0; i <= gridSteps; i++) {
@@ -77,7 +78,7 @@ class MiniChart {
 
       // Axis label
       const val = Math.round(maxY - ((maxY - minY) / gridSteps) * i);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(100, 116, 139, 0.75)';
       ctx.font = '10px monospace';
       ctx.fillText(`${val}${this.options.unit}`, 6, y - 3);
     }
