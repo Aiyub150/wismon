@@ -2,244 +2,1309 @@
 
 > **Monitor. Analyze. Understand.**
 
-**WISMON (Windows System Monitoring)** adalah aplikasi monitoring, observabilitas, dan pemeliharaan performa sistem operasi Windows modern yang menyajikan visibilitas real-time mendalam terhadap kinerja CPU, memori kernel, adapter grafis (GPU), penyimpanan disk, jaringan, proses, layanan, dan keamanan sistem.
+WISMON (**WIndows System MONitoring**) adalah aplikasi monitoring Windows berbasis Python yang membantu pengguna melihat kondisi komputer secara real-time, memahami penggunaan resource, menemukan aktivitas yang tidak biasa, dan melakukan beberapa tindakan pemeliharaan secara langsung.
 
-Dibangun dengan fondasi antarmuka profesional berbasis desain **TailAdmin**, WISMON menghadirkan konsol telemetri berstandar industri dengan dukungan penuh **Dark Mode** dan **Light Mode**, arsitektur streaming Server-Sent Events (SSE) berkecepatan tinggi, serta asisten cerdas **Dahoo** dengan kapabilitas **Detect-Ask-Act**.
+WISMON berjalan sebagai aplikasi web lokal. Backend dan frontend dijalankan dari satu proses Python, lalu dashboard dibuka melalui browser pada komputer yang sama.
 
----
-
-## ⚡ Fitur Utama
-
-### 1. TailAdmin Professional UI & Modern Toast Notification System
-- Antarmuka monitoring modern dan elegan terinspirasi dari TailAdmin Dashboard Template.
-- Dukungan tema ganda instan: **Dark Mode** (`#1A222C` / `#24303F`) dan **Light Mode** (`#F1F5F9` / `#FFFFFF`).
-- **Modern Floating Toast System**: Menggantikan dialog bawaan browser yang kaku (`alert()` dan `confirm()`) dengan notifikasi pop-up modern, ringan, beranimasi halus, dan auto-dismiss progress bar untuk aksi Recycle Bin, proses, dan mitigasi keamanan.
-- Indikator status telemetri real-time: `● LIVE` (pulsing dot hijau), `● RECONNECTING`, dan `● OFFLINE`.
-- Responsive layout yang dense dan fokus pada penyajian data metrik teknis tanpa ornamen visual berlebih.
-
-### 2. Low-Resource & Energy Efficient Telemetry Architecture (v2.1)
-- **Zero-Waste Process Caching**: Menghilangkan duplikasi pemindaian proses sistem pada `SocketCollector`, menggunakan cache resolusi PID on-demand yang memangkas beban CPU secara drastis.
-- **Throttled Subprocess Execution**: Membatasi eksekusi `nvidia-smi` dan menonaktifkan pemanggilan berulang PowerShell pada hardware yang tidak mengekspos sensor thermal ACPI, mencegah lonjakan konsumsi baterai dan CPU.
-- **Adaptive Services Polling**: Mengoptimalkan pembacaan Service Control Manager dengan caching metadata statis dan interval adaptif (25s) sehingga tidak membebani sistem.
-
-### 3. Native Windows PDH & ACPI Thermal Architecture
-- **Zero-Privilege Thermal Monitoring**: Menggunakan antarmuka native Windows Performance Data Helper (`pdh.dll`) via counter `\Thermal Zone Information(*)\High Precision Temperature`.
-- Pembacaan suhu CPU & SoC akurat (derajat Celsius) secara instan tanpa memerlukan hak akses Administrator atau driver kernel pihak ketiga.
-- Indikator visual meter / progress bar interaktif pada kartu KPI suhu di halaman Dashboard.
-
-### 4. Universal Multi-GPU & Integrated Graphics Telemetry
-- Mendukung seluruh arsitektur grafis: **Intel Iris Xe**, **Intel UHD**, **AMD Radeon**, dan **NVIDIA GeForce / RTX**.
-- Integrasi Windows DirectX / WDDM PerfCounters untuk engine utilization (3D) dan alokasi memory VRAM (Dedicated & Shared System Memory).
-- Deteksi diode suhu dedicated via `nvidia-smi` untuk kartu diskrit, serta korelasi thermal package SoC untuk GPU terintegrasi.
-- Tampilan GPU & Hardware dinamis tanpa delay atau status stuck pada "Detecting...".
-
-### 5. Decoupled Real-Time Streaming Architecture
-- Streaming telemetri Server-Sent Events (SSE) berkadensi ~1.0 detik langsung dari state in-memory ring-buffer (300 sampel data).
-- Scheduler independen: telemetri cepat (CPU, RAM, GPU, Storage I/O, Network) dieksekusi instan (<10ms), sedangkan kolektor berat (`ProcessCollector`, `ServicesCollector`, `HardwareCollector`) diproses secara asinkron di worker thread terpisah (`asyncio.to_thread`).
-- Penulisan database SQLite (WAL) dibatch per 5–10 frame untuk menjaga efisiensi SSD dan meminimalkan disk I/O.
-
-### 6. Threat Center & Multi-Tier Active Remediation
-- Deteksi otomatis anomali beban prosesor ekstrem, lonjakan koneksi mencurigakan, dan kepenuhan memori fisik.
-- **Multi-Tier Remediation**:
-  - **Tier 1 (Suspend / Cooldown)**: Menangguhkan (*pause / suspend*) proses target selama 3.5 detik untuk mendinginkan prosesor dan menstabilkan beban sistem, lalu melanjutkannya (*resume*) secara normal.
-  - **Tier 2 (Fallback Priority Throttle)**: Jika hak penangguhan dibatasi oleh Windows (Access Denied), sistem secara otomatis beralih menurunkan prioritas proses ke `IDLE` / `BELOW_NORMAL` untuk melegakan beban CPU tanpa error.
-  - **Tier 3 (Alternative Tools & Diagnosis)**: Jika tindakan gagal, status TIDAK ditandai resolved palsu; sistem menyajikan diagnosa penyebab yang jelas dan menyajikan opsi alternatif (Terminasi Proses atau False Positive).
-  - **RAM Exhaustion**: Membersihkan working set memory proses aktif via Windows API `EmptyWorkingSet`.
-- Setiap aksi tercatat dalam audit log dan riwayat database.
-
-### 7. Dahoo Assistant 2.1 (Detect — Ask — Act & Token-Efficient AI)
-- Maskot pendamping cerdas dengan ekspresi wajah reaktif (`happy`, `normal`, `worried`, `alert`, `thinking`).
-- **Pola Detect-Ask-Act Cepat & Responsif**:
-  - **Detect**: Memeriksa beban CPU, RAM, suhu, file sementara, dan ancaman secara real-time.
-  - **Ask**: Memberikan saran perbaikan kontekstual dilengkapi tombol aksi interaktif instan.
-  - **Act**: Mengeksekusi perbaikan nyata tanpa delay dengan konfirmasi toast feedback langsung.
-- **Token-Efficient Cloud AI (Gemini)**:
-  - Eksekusi asinkron non-blocking (`asyncio.to_thread`) sehingga tidak membekukan streaming data atau API server.
-  - Ringkasan konteks telemetri padat untuk menghemat kuota token Gemini secara signifikan.
-  - Gemini kini dapat merekomendasikan dan memicu tombol aksi perbaikan nyata (`[ACTION:...]`) sama seperti asisten lokal.
-- **Pengenalan Bahasa Alami Fleksibel**: Memahami langsung instruksi perbaikan (seperti *"tangguhkan proses"*, *"dinginkan cpu"*, *"bersihkan memori"*) tanpa template kaku.
-
-### 8. Storage Analyzer & Memory Deep Architecture
-- **Safe Recycle Bin Deletion**: Menghapus file besar (>100 MB) yang tidak terpakai langsung ke Windows Recycle Bin dengan konfirmasi modal pop-up yang aman.
-- **Deep Memory**: Mengurai RAM fisik, Paged Pool, Non-Paged Pool, Commit Charge, Commit Limit, dan System Cache via `GetPerformanceInfo`.
-- **Storage Analyzer**: Menemukan file berukuran besar, file lama (> 180 hari), dan pembersihan aman file sementara di folder Temp.
-
-### 8. Network Throughput & Socket Explorer
-- Kecepatan unduh dan unggah real-time per adapter aktif (Wi-Fi, Ethernet).
-- Visualisasi koneksi TCP/UDP aktif beserta resolusi nama domain (reverse-DNS) asinkron.
+> **Status project:** Open-source / dalam pengembangan  
+> **Platform:** Windows 10/11 64-bit  
+> **Mode AI:** Local Intelligence tersedia tanpa API key; Google Gemini bersifat opsional.
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## 📑 Daftar Isi
 
-```
-┌────────────────────────────────────────────────────────┐
-│                      Windows OS                        │
-│    Kernel32 / PDH.dll / Advapi32 / DirectX / WMI       │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                    Collector Layer                     │
-│  cpu.py | memory.py | gpu.py | storage.py              │
-│  network.py | process.py | socket.py | temperature.py  │
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│           Monitoring & Remediation Engine              │
-│  - Realtime Ring Buffer (300 samples)                  │
-│  - Analysis Engine (Baselines, Thresholds, Health)     │
-│  - Threat Center (Active Remediation & Cool Down)      │
-│  - Storage Analyzer (Temp / Large file scanner)        │
-│  - Dahoo Engine (Detect-Ask-Act + Gemini Cloud)        │
-└───────────────────────────┬────────────────────────────┘
-                            │
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-┌───────────────────────────┐ ┌──────────────────────────┐
-│  SQLite Database (WAL)    │ │   FastAPI Backend        │
-│  database/monitoring.db   │ │   REST Endpoints & SSE   │
-└───────────────────────────┘ └───────────┬──────────────┘
-                                          │
-                                          ▼
-                              ┌──────────────────────────┐
-                              │  TailAdmin Modern SPA    │
-                              │  HTML5, CSS, Vanilla JS  │
-                              └──────────────────────────┘
-```
+- [Apa yang Bisa Dilakukan WISMON?](#-apa-yang-bisa-dilakukan-wismon)
+- [Tampilan dan Menu](#-tampilan-dan-menu)
+- [Persyaratan Sistem](#-persyaratan-sistem)
+- [Instalasi dari Nol](#-instalasi-dari-nol)
+- [Quick Start](#-quick-start)
+- [Konfigurasi `.env`](#-konfigurasi-env)
+- [Cara Menggunakan WISMON](#-cara-menggunakan-wismon)
+- [Cara Memahami Status WISMON](#-cara-memahami-status-wismon)
+- [Contoh Workflow Komputer Lambat](#-contoh-workflow-komputer-lambat)
+- [Google Gemini / Cloud AI](#-google-gemini--cloud-ai)
+- [Database dan Retensi Data](#-database-dan-retensi-data)
+- [Hak Akses Administrator](#-hak-akses-administrator)
+- [Troubleshooting](#-troubleshooting)
+- [Catatan Keamanan](#-catatan-keamanan)
+- [Batasan WISMON](#-batasan-wismon)
+- [Struktur Project](#-struktur-project)
+- [Untuk Developer](#-untuk-developer)
+- [Lisensi](#-lisensi)
 
 ---
 
-## 📋 Persyaratan Sistem
+# 🧭 Apa yang Bisa Dilakukan WISMON?
 
-- **Sistem Operasi**: Windows 10 atau Windows 11 (64-bit)
-- **Python**: Versi 3.10 atau lebih baru (disarankan 3.11+)
-- **Hak Akses**: Pengguna standar (Hak Administrator hanya diperlukan untuk menghentikan service sistem terlindungi)
+WISMON mengumpulkan telemetry dari Windows dan menampilkannya melalui dashboard web lokal.
+
+Fitur utamanya meliputi:
+
+- CPU usage dan telemetry per-core.
+- RAM dan statistik memory tingkat lanjut.
+- GPU dan hardware telemetry.
+- Disk/storage usage serta aktivitas I/O.
+- Network throughput dan koneksi TCP/UDP.
+- Process Explorer untuk melihat proses yang menggunakan resource tinggi.
+- Windows Services Explorer.
+- Security Events dan deteksi beberapa anomali sistem.
+- Performance & History untuk melihat data monitoring.
+- Storage Analyzer untuk menemukan file yang besar/lama dan melakukan pembersihan tertentu.
+- Dahoo Assistant untuk menjelaskan kondisi komputer serta menawarkan beberapa tindakan perbaikan.
+- Dark Mode dan Light Mode.
+- Streaming telemetry real-time menggunakan Server-Sent Events (SSE).
+
+Secara arsitektur, WISMON menggunakan FastAPI sebagai backend/API, SQLite sebagai database lokal, collector Windows sebagai sumber telemetry, dan frontend HTML/CSS/JavaScript sebagai dashboard. Struktur repository saat ini memisahkan `backend/`, `frontend/`, `database/`, serta `monitor.py` sebagai entry point utama.
 
 ---
 
-## 🚀 Instalasi & Menjalankan Aplikasi
+# 🖥️ Tampilan dan Menu
 
-### 1. Masuk ke Direktori Project
+Sidebar WISMON saat ini dibagi menjadi:
+
+| Kelompok | Menu | Fungsi |
+|---|---|---|
+| Overview | Dashboard | Ringkasan kondisi komputer |
+| System | CPU | Analisis penggunaan CPU |
+| System | Memory | Analisis RAM dan memory kernel |
+| System | GPU & Hardware | Informasi GPU dan hardware |
+| System | Storage | Kapasitas dan aktivitas storage |
+| System | Network | Adapter, throughput, dan koneksi |
+| Activity | Processes | Daftar proses Windows |
+| Activity | Services | Daftar Windows Services |
+| Security | Security Events | Anomali/event keamanan |
+| Analysis | Performance & History | Analisis performa dan history |
+| Assistant | Dahoo | Asisten monitoring dan troubleshooting |
+
+---
+
+# 💻 Persyaratan Sistem
+
+## Wajib
+
+- Windows 10 atau Windows 11 64-bit.
+- Python **3.10 atau lebih baru**.
+- Git untuk mengunduh repository.
+- Browser modern seperti Chrome, Edge, atau Firefox.
+
+Python **3.11** direkomendasikan untuk development.
+
+Dependency utama yang digunakan repository saat ini antara lain `psutil`, `fastapi`, `uvicorn`, `aiosqlite`, `pydantic`, `python-dotenv`, dan `google-genai`.
+
+> **Catatan:** versi package ditentukan oleh `requirements.txt` dan dapat berubah mengikuti perkembangan project.
+
+---
+
+# 🚀 Instalasi dari Nol
+
+Bagian ini ditulis untuk pengguna yang **belum pernah menjalankan WISMON sebelumnya**.
+
+## 1. Install Git
+
+Download dan install Git:
+
+<https://git-scm.com/download/win>
+
+Setelah selesai, buka **PowerShell** dan jalankan:
+
 ```powershell
-cd "c:\Users\nama\System Monitoring"
+git --version
 ```
 
-### 2. Aktifkan Virtual Environment & Pasang Dependensi
-Virtual environment `.venv` sudah tersedia di repositori:
+Jika muncul versi Git, berarti instalasi berhasil.
+
+---
+
+## 2. Install Python
+
+Download Python:
+
+<https://www.python.org/downloads/windows/>
+
+Saat installer Python dibuka, centang:
+
+```text
+Add Python.exe to PATH
+```
+
+Setelah instalasi selesai, buka PowerShell baru:
+
+```powershell
+python --version
+```
+
+atau:
+
+```powershell
+py --version
+```
+
+Pastikan versinya minimal 3.10. Python 3.11 direkomendasikan.
+
+---
+
+## 3. Download Repository
+
+Pilih lokasi tempat WISMON akan disimpan.
+
+Contoh:
+
+```powershell
+cd $HOME
+git clone https://github.com/Aiyub150/wismon.git
+```
+
+Setelah selesai:
+
+```powershell
+cd wismon
+```
+
+Cek isi folder:
+
+```powershell
+dir
+```
+
+Anda seharusnya melihat file/folder seperti:
+
+```text
+backend
+frontend
+monitor.py
+requirements.txt
+.env.example
+README.md
+```
+
+---
+
+## 4. Masuk ke Folder WISMON
+
+Jika PowerShell dibuka dari lokasi lain:
+
+```powershell
+cd "C:\path\ke\wismon"
+```
+
+Contoh:
+
+```powershell
+cd "C:\Users\Aiyub\wismon"
+```
+
+> Ganti path contoh dengan lokasi repository Anda sendiri.
+
+---
+
+## 5. Buat Virtual Environment
+
+Buat environment Python lokal untuk WISMON:
+
+```powershell
+py -3.11 -m venv .venv
+```
+
+Jika `py -3.11` tidak tersedia tetapi `python` tersedia:
+
+```powershell
+python -m venv .venv
+```
+
+Setelah selesai, folder berikut akan dibuat:
+
+```text
+wismon/
+└── .venv/
+```
+
+> **Penting:** jangan mengandalkan `.venv` dari komputer atau repository lain. Virtual environment sebaiknya dibuat pada mesin pengguna sendiri.
+
+---
+
+## 6. Aktifkan Virtual Environment
+
+Di PowerShell:
+
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
 ```
 
-### 3. Konfigurasi Environment (Opsional)
-Salin berkas template `.env.example` menjadi `.env`:
-```powershell
-cp .env.example .env
+Jika berhasil, prompt biasanya berubah menjadi:
+
+```text
+(.venv) PS C:\Users\Aiyub\wismon>
 ```
-Isi konfigurasi jika ingin mengaktifkan mode Cloud AI pada Dahoo:
+
+### Jika PowerShell menolak menjalankan script
+
+Jika muncul pesan bahwa script execution diblokir:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Kemudian coba lagi:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Alternatifnya, gunakan Command Prompt:
+
+```cmd
+cd C:\Users\Aiyub\wismon
+.venv\Scripts\activate.bat
+```
+
+---
+
+## 7. Install Dependency
+
+Pastikan `.venv` aktif, kemudian:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Untuk pengecekan sederhana:
+
+```powershell
+python -c "import fastapi, psutil, aiosqlite; print('WISMON dependencies OK')"
+```
+
+Jika berhasil:
+
+```text
+WISMON dependencies OK
+```
+
+---
+
+## 8. Buat File `.env`
+
+Repository menyediakan:
+
+```text
+.env.example
+```
+
+Buat salinan:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Kemudian buka:
+
+```powershell
+notepad .env
+```
+
+### Konfigurasi minimum
+
+Untuk penggunaan lokal, Anda dapat memakai:
+
+```env
+HOST=127.0.0.1
+PORT=8080
+```
+
+File `.env.example` juga menyediakan interval monitoring serta retention data seperti:
+
+```env
+INTERVAL_REALTIME=1.0
+INTERVAL_PROCESS=2.0
+INTERVAL_SOCKETS=3.0
+INTERVAL_SERVICES=5.0
+INTERVAL_STORAGE_IO=1.0
+
+DETAILED_RETENTION_HOURS=24
+AGGREGATED_RETENTION_DAYS=7
+```
+
+### Gemini tidak wajib
+
+Biarkan kosong jika belum ingin mengaktifkan Cloud AI:
+
+```env
+GEMINI_API_KEY=
+```
+
+Dahoo tetap dapat menggunakan Local Intelligence Engine.
+
+---
+
+## 9. Jalankan WISMON
+
+Pastikan berada di root repository dan `.venv` aktif:
+
+```powershell
+python monitor.py
+```
+
+Jika startup berhasil, terminal akan menunjukkan alamat server, secara default:
+
+```text
+http://127.0.0.1:8080
+```
+
+---
+
+## 10. Buka Dashboard
+
+Buka browser dan akses:
+
+```text
+http://127.0.0.1:8080
+```
+
+**Jangan membuka frontend sebagai `file:///...`**. Dashboard disajikan oleh backend WISMON.
+
+---
+
+# ⚡ Quick Start
+
+Setelah Git dan Python sudah terinstall:
+
+```powershell
+git clone https://github.com/Aiyub150/wismon.git
+cd wismon
+
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+Copy-Item .env.example .env
+
+python monitor.py
+```
+
+Kemudian buka:
+
+```text
+http://127.0.0.1:8080
+```
+
+---
+
+# ⚙️ Konfigurasi `.env`
+
+Contoh konfigurasi lengkap:
+
 ```env
 # Server
 HOST=127.0.0.1
 PORT=8080
 
-# Dahoo Cloud AI (Opsional)
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.6-flash
-```
-*Catatan: Tanpa `GEMINI_API_KEY`, Dahoo tetap dapat digunakan sepenuhnya secara offline via Local Intelligence Engine.*
+# Monitoring intervals (seconds)
+INTERVAL_REALTIME=1.0
+INTERVAL_PROCESS=2.0
+INTERVAL_SOCKETS=3.0
+INTERVAL_SERVICES=5.0
+INTERVAL_STORAGE_IO=1.0
 
-### 4. Jalankan Aplikasi
-Jalankan satu perintah tunggal:
+# Dahoo Cloud AI (optional)
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+
+# Data retention
+DETAILED_RETENTION_HOURS=24
+AGGREGATED_RETENTION_DAYS=7
+```
+
+Konfigurasi tersebut sesuai dengan parameter yang saat ini disediakan oleh `.env.example` dan `backend/config.py`.
+
+> **Catatan dokumentasi:** jangan menyalin API key ke README, source code, screenshot, atau commit Git.
+
+---
+
+# 📖 Cara Menggunakan WISMON
+
+## 1. Dashboard
+
+Buka:
+
+```text
+Overview → Dashboard
+```
+
+Dashboard digunakan untuk menjawab:
+
+> **"Apakah komputer saya sedang dalam kondisi normal?"**
+
+Periksa ringkasan seperti:
+
+- CPU Usage
+- Memory Usage
+- GPU
+- Storage
+- Network
+- Temperature jika tersedia
+- Health Status
+- Health Score
+- Security/Threat information
+
+### Cara membacanya
+
+Sebagai contoh:
+
+```text
+CPU       25%
+Memory    55%
+Storage   68%
+```
+
+Gunakan hasil ini sebagai petunjuk awal:
+
+- CPU tinggi terus-menerus → periksa **Processes**.
+- RAM sangat tinggi → periksa **Memory** dan **Processes**.
+- Disk hampir penuh → periksa **Storage**.
+- Ada security event → periksa **Security Events**.
+
+---
+
+## 2. CPU
+
+Buka:
+
+```text
+System → CPU
+```
+
+Gunakan untuk melihat penggunaan CPU dan pola beban CPU, termasuk per-core telemetry jika tersedia.
+
+Cocok digunakan ketika:
+
+- laptop terasa lambat,
+- kipas berputar kencang,
+- CPU terus tinggi,
+- suhu meningkat.
+
+---
+
+## 3. Memory
+
+Buka:
+
+```text
+System → Memory
+```
+
+Gunakan ketika RAM terasa penuh atau komputer mulai lambat.
+
+WISMON juga menyediakan statistik memory tingkat lanjut, termasuk:
+
+- Physical RAM
+- Paged Pool
+- Non-Paged Pool
+- Commit Charge
+- Commit Limit
+- System Cache
+
+---
+
+## 4. GPU & Hardware
+
+Buka:
+
+```text
+System → GPU & Hardware
+```
+
+Digunakan untuk melihat telemetry GPU/hardware yang dapat dibaca dari Windows.
+
+Perangkat yang berbeda dapat menghasilkan data berbeda. Jika suatu sensor tidak tersedia, `Unavailable` tidak otomatis berarti hardware rusak.
+
+---
+
+## 5. Storage
+
+Buka:
+
+```text
+System → Storage
+```
+
+Gunakan untuk:
+
+- melihat kapasitas storage,
+- melihat aktivitas disk/I/O,
+- mencari file besar,
+- mencari file lama,
+- melakukan pembersihan tertentu.
+
+### Sebelum menghapus file
+
+Pastikan file tersebut memang aman dihapus.
+
+Jangan menghapus file sistem/program yang tidak Anda pahami.
+
+---
+
+## 6. Network
+
+Buka:
+
+```text
+System → Network
+```
+
+Gunakan untuk memahami:
+
+- adapter jaringan aktif,
+- download throughput,
+- upload throughput,
+- koneksi TCP/UDP,
+- informasi host/domain yang terkait koneksi.
+
+Menu ini lebih ditujukan untuk pengguna teknis.
+
+---
+
+## 7. Processes
+
+Buka:
+
+```text
+Activity → Processes
+```
+
+Ini adalah halaman yang sangat berguna saat komputer terasa lambat.
+
+Informasi yang tersedia mencakup:
+
+- PID
+- Process name
+- CPU
+- Memory
+- Threads
+- Handles
+- Username
+- description/path jika tersedia
+
+Daftar proses dapat dicari dan diurutkan.
+
+### Contoh
+
+Jika:
+
+```text
+CPU = 95%
+```
+
+buka **Processes**, kemudian urutkan berdasarkan CPU.
+
+### Inspect
+
+Gunakan **Inspect** untuk melihat informasi proses sebelum mengambil tindakan.
+
+### End
+
+Tombol **End** digunakan untuk menghentikan proses.
+
+**Jangan menghentikan process Windows hanya karena namanya terlihat asing.**
+
+Jika tidak yakin:
+
+1. Inspect process.
+2. Periksa description/path.
+3. Cari tahu fungsi process tersebut.
+4. Tanyakan kepada Dahoo.
+5. Baru pertimbangkan tindakan.
+
+---
+
+## 8. Services
+
+Buka:
+
+```text
+Activity → Services
+```
+
+Digunakan untuk melihat Windows Services.
+
+Menu ini berguna untuk troubleshooting service Windows, tetapi perubahan pada service sebaiknya hanya dilakukan jika Anda mengetahui dampaknya.
+
+---
+
+## 9. Security Events
+
+Buka:
+
+```text
+Security → Security Events
+```
+
+Menampilkan anomaly/security event yang terdeteksi WISMON.
+
+Contoh kategori yang didokumentasikan project:
+
+- penggunaan CPU ekstrem,
+- lonjakan koneksi tertentu,
+- tekanan/kepenuhan memory.
+
+### Penting: WISMON bukan antivirus
+
+Security Events adalah indikator untuk investigasi, bukan bukti absolut malware.
+
+Jangan mengartikan:
+
+```text
+0 Security Events = pasti bebas malware
+```
+
+atau:
+
+```text
+1 Security Event = pasti virus
+```
+
+---
+
+## 10. Performance & History
+
+Buka:
+
+```text
+Analysis → Performance & History
+```
+
+Gunakan untuk melihat data performa dan histori telemetry sehingga Anda dapat membandingkan kondisi komputer dari waktu ke waktu.
+
+---
+
+## 11. Dahoo Assistant
+
+Klik tombol **Dahoo** pada topbar.
+
+Dahoo dapat digunakan untuk pertanyaan monitoring maupun troubleshooting.
+
+### Contoh pertanyaan
+
+```text
+Kenapa laptop saya lemot?
+```
+
+```text
+Berapa penggunaan RAM saya?
+```
+
+```text
+Proses mana yang paling banyak menggunakan CPU?
+```
+
+```text
+Kenapa CPU saya tinggi?
+```
+
+```text
+Bersihkan memori
+```
+
+```text
+Tangguhkan proses yang menggunakan CPU tinggi
+```
+
+Dahoo dapat menampilkan tombol tindakan tertentu. Baca penjelasan dan hasil yang ditampilkan sebelum menjalankan tindakan yang memengaruhi sistem.
+
+---
+
+# 🔄 Cara Memahami Status WISMON
+
+Pada topbar terdapat status:
+
+```text
+LIVE
+RECONNECTING
+OFFLINE
+```
+
+## LIVE
+
+Browser terhubung ke telemetry stream WISMON.
+
+## RECONNECTING
+
+Browser sedang mencoba menyambungkan kembali telemetry stream.
+
+## OFFLINE
+
+Koneksi ke backend/stream belum tersedia atau terputus.
+
+### Jika tidak kembali ke LIVE
+
+1. Pastikan terminal WISMON masih berjalan.
+2. Periksa error di terminal.
+3. Refresh browser.
+4. Coba buka `http://127.0.0.1:8080`.
+5. Periksa konflik port.
+
+---
+
+# 🐢 Contoh Workflow: Komputer Terasa Lambat
+
+## Langkah 1 — Dashboard
+
+Periksa:
+
+```text
+CPU
+Memory
+Storage
+Health
+```
+
+## Langkah 2 — CPU tinggi?
+
+Jika CPU tinggi, buka:
+
+```text
+Activity → Processes
+```
+
+## Langkah 3 — Cari process yang berat
+
+Sort berdasarkan CPU atau Memory.
+
+## Langkah 4 — Inspect
+
+Klik:
+
+```text
+Inspect
+```
+
+## Langkah 5 — Gunakan Dahoo
+
+Contoh:
+
+```text
+Kenapa proses ini menggunakan CPU tinggi?
+```
+
+## Langkah 6 — Ambil tindakan
+
+Jika memang aman dan Anda memahami dampaknya, gunakan action yang tersedia.
+
+## Langkah 7 — Verifikasi
+
+Kembali ke Dashboard dan periksa apakah:
+
+```text
+CPU ↓
+Temperature ↓
+Memory ↓
+Health ↑
+```
+
+---
+
+# 🤖 Google Gemini / Cloud AI
+
+Google Gemini bersifat **opsional**.
+
+Tanpa API key:
+
+```text
+WISMON
+└── Dahoo
+    └── Local Intelligence Engine
+```
+
+Dengan API key:
+
+```text
+WISMON
+└── Dahoo
+    ├── Local Intelligence
+    └── Gemini Cloud AI
+```
+
+## Konfigurasi
+
+Masukkan key ke `.env`:
+
+```env
+GEMINI_API_KEY=YOUR_API_KEY
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Gunakan model yang memang tersedia pada layanan/API yang Anda gunakan.
+
+Setelah `.env` diubah, restart WISMON:
+
+```text
+Ctrl+C
+```
+
+kemudian:
+
 ```powershell
 python monitor.py
 ```
-Aplikasi akan menampilkan banner di konsol terminal:
-```text
-=======================================
- WISMON — Windows System Monitoring
- Monitor. Analyze. Understand.
-=======================================
 
-Backend : http://127.0.0.1:8080
-Frontend: http://127.0.0.1:8080
+### Privasi
 
-Monitoring: ONLINE (SSE Stream Active)
-
-CPU     : 18.5%
-Memory  : 52.3%
-Threats : 0
-
-Press Ctrl+C to stop.
-=======================================
-```
-
-Buka browser pada alamat: **`http://127.0.0.1:8080`**
+Pahami data yang dikirim ke layanan cloud sebelum mengaktifkan Cloud AI. Jangan memasukkan data rahasia ke prompt hanya karena fitur AI tersedia.
 
 ---
 
-## 🗄️ Database & Retensi Data
+# 🗄️ Database dan Retensi Data
 
-Aplikasi menggunakan database lokal **SQLite** dalam mode **WAL (Write-Ahead Logging)** yang terletak pada:
+Database lokal default berada di:
+
 ```text
 database/monitoring.db
 ```
-- **Buffering**: Data telemetry ditulis secara batched untuk meminimalkan beban I/O disk.
-- **Retensi Data**:
-  - Ring buffer in-memory: 300 sampel data real-time terbaru (tanpa beban disk).
-  - Telemetry detail: Tersimpan selama 24 jam.
-  - Pembersihan otomatis (*retention purge*) berjalan secara berkala di latar belakang.
+
+WISMON menggunakan SQLite untuk penyimpanan lokal.
+
+Konfigurasi retention saat ini tersedia melalui:
+
+```env
+DETAILED_RETENTION_HOURS=24
+AGGREGATED_RETENTION_DAYS=7
+```
+
+Ring buffer realtime digunakan untuk telemetry terbaru di memory.
+
+### Reset database
+
+Jika ingin mereset data lokal, hentikan WISMON terlebih dahulu sebelum mengubah atau menghapus database.
 
 ---
 
-## 🛡️ Prinsip Keamanan & Mitigasi
+# 🔐 Hak Akses Administrator
 
-- **Least Privilege**: Tidak memaksa pengguna menjalankan aplikasi sebagai Administrator.
-- **Konfirmasi Eksplisit**: Tindakan berbahaya (seperti mematikan proses `Terminate Process`) **selalu mewajibkan konfirmasi modal** dari pengguna.
-- **Perlindungan Kernel**: Proses inti sistem (PID 0, PID 4) tidak dapat dimatikan melalui API.
-- **Keamanan Berkas**: Berkas `.env`, folder `Bug/`, dan catatan markdown pengembangan dikecualikan dari Git repository via `.gitignore`.
+WISMON dirancang agar monitoring dasar dapat dijalankan oleh user biasa.
 
----
+Namun Windows dapat membatasi operasi tertentu terhadap process/service yang dilindungi.
 
-## 🛠️ Struktur Direktori
+Jika muncul:
 
 ```text
-├── database/
-│   └── monitoring.db              # Database SQLite (dibuat saat startup)
-├── backend/
-│   ├── config.py                  # Konfigurasi & pembacaan environment
-│   ├── db.py                      # Operasi database & schema
-│   ├── collectors/                # Kolektor telemetry terisolasi
-│   │   ├── cpu.py                 # CPU & per-core
-│   │   ├── memory.py              # RAM & kernel pools (Win32)
-│   │   ├── gpu.py                 # Telemetry GPU (PDH & DirectX)
-│   │   ├── storage.py             # Partisi disk & live I/O
-│   │   ├── network.py             # Adapter & throughput speed
-│   │   ├── process.py             # Enumerasi proses Windows
-│   │   ├── socket.py              # Koneksi jaringan & async DNS
-│   │   ├── services.py            # Windows services & svchost
-│   │   └── temperature.py         # Native PDH ACPI thermal zones & baterai
-│   ├── engine/                    # Mesin analisis & Dahoo
-│   │   ├── aggregator.py          # Ring buffer & SSE coordinator
-│   │   ├── analysis.py            # Baseline & health scoring
-│   │   ├── threat_center.py       # Active remediation & cooldown engine
-│   │   ├── storage_analyzer.py    # Pemindai & pembersih file sementara
-│   │   └── dahoo_engine.py        # Asisten Dahoo (Detect-Ask-Act & Gemini)
-│   ├── api/                       # Router FastAPI REST & SSE
-│   └── main.py                    # Entrypoint aplikasi FastAPI
-├── frontend/
-│   ├── index.html                 # Antarmuka web TailAdmin
-│   ├── css/                       # Desain sistem & tokens CSS
-│   └── js/                        # Engine charts, SSE, Dahoo & controller halaman
-├── monitor.py                     # Skrip startup terpadu
-├── requirements.txt               # Daftar dependensi Python
-├── .env.example                   # Template konfigurasi environment
-├── .gitignore                     # Konfigurasi pengecualian Git
-└── README.md                      # Dokumentasi project
+Access Denied
+```
+
+itu tidak otomatis berarti WISMON rusak.
+
+Jangan menjalankan WISMON sebagai Administrator hanya untuk mengatasi semua masalah. Gunakan hak akses minimum yang diperlukan.
+
+---
+
+# 🛠️ Troubleshooting
+
+## 1. `python is not recognized`
+
+Coba:
+
+```powershell
+py --version
+```
+
+Jika tidak tersedia, install Python dan pastikan PATH/launcher tersedia.
+
+---
+
+## 2. `git is not recognized`
+
+Install Git:
+
+<https://git-scm.com/download/win>
+
+Kemudian buka PowerShell baru.
+
+---
+
+## 3. `.venv\Scripts\Activate.ps1` gagal
+
+Gunakan:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+lalu:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
 ---
 
-## 📄 Lisensi
-Project ini didistribusikan untuk monitoring dan administrasi sistem Windows pribadi/organisasi.
+## 4. Dependency gagal diinstall
+
+Pastikan `.venv` aktif:
+
+```powershell
+python --version
+python -m pip --version
+```
+
+Kemudian:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Jika tetap gagal, simpan pesan error lengkap dari terminal untuk debugging/issue.
+
+---
+
+## 5. Port 8080 sudah digunakan
+
+Periksa:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue
+```
+
+Anda juga dapat melihat process yang menggunakan port tersebut:
+
+```powershell
+Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess
+```
+
+Alternatifnya, ubah `.env`:
+
+```env
+PORT=8081
+```
+
+Kemudian restart WISMON.
+
+---
+
+## 6. Browser tidak dapat membuka WISMON
+
+Periksa apakah terminal masih menjalankan:
+
+```powershell
+python monitor.py
+```
+
+Pastikan tidak ada error seperti:
+
+```text
+Traceback
+ImportError
+ModuleNotFoundError
+OSError
+```
+
+Kemudian coba:
+
+```text
+http://127.0.0.1:8080
+```
+
+---
+
+## 7. Dashboard terbuka tetapi data tidak bergerak
+
+Periksa status:
+
+```text
+LIVE
+```
+
+Jika `RECONNECTING` atau `OFFLINE`:
+
+1. pastikan backend masih berjalan;
+2. refresh browser;
+3. periksa terminal;
+4. pastikan port yang digunakan benar.
+
+---
+
+## 8. GPU tidak terdeteksi
+
+Periksa:
+
+- driver GPU,
+- jenis GPU,
+- dukungan counter/telemetry Windows,
+- apakah hardware mengekspos metrik yang dibutuhkan.
+
+---
+
+## 9. Temperature tidak tersedia
+
+Sensor temperature berbeda antar vendor/perangkat. Tidak semua Windows PC mengekspos telemetry yang dapat digunakan WISMON.
+
+---
+
+## 10. Dahoo Cloud AI tidak aktif
+
+Periksa `.env`:
+
+```env
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Kemudian restart:
+
+```powershell
+python monitor.py
+```
+
+Jika tidak ingin menggunakan Cloud AI, gunakan Local Intelligence.
+
+---
+
+## 11. Processes kosong
+
+Periksa:
+
+```text
+Activity → Processes
+```
+
+Jika tidak muncul:
+
+1. tunggu beberapa detik;
+2. refresh halaman;
+3. periksa terminal;
+4. pastikan backend aktif.
+
+---
+
+# 🛡️ Catatan Keamanan
+
+WISMON bukan aplikasi read-only. Beberapa fitur dapat melakukan tindakan terhadap sistem, termasuk:
+
+- suspend process,
+- terminate process,
+- memory cleanup,
+- file cleanup tertentu.
+
+Karena itu:
+
+- jangan menjalankan tindakan yang tidak Anda pahami;
+- jangan menghentikan process Windows yang tidak Anda kenali;
+- backup data penting;
+- jangan membagikan API key;
+- jangan membuka WISMON ke internet tanpa review keamanan terlebih dahulu;
+- gunakan least privilege.
+
+## Jangan menganggap WISMON sebagai antivirus
+
+Security Events/anomaly detection adalah alat monitoring dan investigasi, bukan pengganti antivirus, EDR, atau endpoint security platform.
+
+---
+
+# ⚠️ Batasan WISMON
+
+WISMON bergantung pada API dan telemetry yang tersedia pada sistem Windows dan hardware masing-masing perangkat.
+
+Karena itu hasil dapat berbeda antar laptop/PC.
+
+Contoh:
+
+- GPU telemetry dapat berbeda.
+- Temperature sensor dapat tidak tersedia.
+- Beberapa process tidak dapat diakses.
+- Protected process dapat menolak operasi.
+- Hardware vendor dapat mengekspos telemetry yang berbeda.
+
+WISMON sebaiknya dipahami sebagai:
+
+> **Windows monitoring and troubleshooting tool**
+
+bukan sumber kebenaran absolut untuk seluruh kondisi hardware/software.
+
+---
+
+# 🗂️ Struktur Project
+
+```text
+wismon/
+├── backend/
+│   ├── api/
+│   ├── collectors/
+│   ├── engine/
+│   ├── config.py
+│   ├── db.py
+│   └── main.py
+│
+├── frontend/
+│   ├── css/
+│   ├── js/
+│   └── index.html
+│
+├── database/
+│   └── monitoring.db
+│
+├── monitor.py
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+---
+
+# 👨‍💻 Untuk Developer
+
+## Jalankan environment
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+## Install dependency
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+## Jalankan server
+
+```powershell
+python monitor.py
+```
+
+## Frontend
+
+Frontend menggunakan HTML/CSS/Vanilla JavaScript dan disajikan oleh backend. File `frontend/index.html` memuat controller halaman seperti Dashboard, CPU, Memory, Storage, Network, Processes, Services, Security, Hardware, dan Analysis.
+
+## Konfigurasi
+
+`backend/config.py` memuat konfigurasi environment seperti:
+
+- HOST
+- PORT
+- monitoring intervals
+- retention
+- Gemini configuration
+
+---
+
+# 🧪 Checklist Setelah Instalasi
+
+## Backend
+
+```text
+[ ] python monitor.py berjalan tanpa traceback
+[ ] server dapat diakses
+[ ] http://127.0.0.1:8080 terbuka
+```
+
+## Realtime
+
+```text
+[ ] status = LIVE
+[ ] CPU berubah
+[ ] Memory berubah
+[ ] telemetry/chart menerima data
+```
+
+## Activity
+
+```text
+[ ] Processes dapat dibuka
+[ ] process muncul
+[ ] search/sort bekerja
+```
+
+## Dahoo
+
+```text
+[ ] Dahoo dapat dibuka
+[ ] pertanyaan sederhana mendapat response
+[ ] Local Intelligence bekerja tanpa Gemini
+```
+
+## Cloud AI (opsional)
+
+```text
+[ ] GEMINI_API_KEY terisi
+[ ] GEMINI_MODEL sesuai model yang tersedia
+[ ] Cloud AI dapat dipilih
+```
+
+---
+
+# ❓ FAQ
+
+## Apakah WISMON perlu Node.js?
+
+Tidak untuk menjalankan aplikasi sebagaimana struktur repository saat ini. Frontend disajikan oleh backend Python.
+
+## Apakah harus memakai Administrator?
+
+Tidak untuk monitoring dasar. Beberapa operasi terhadap process/service tertentu dapat memerlukan hak akses lebih tinggi atau tetap ditolak oleh Windows.
+
+## Apakah Gemini wajib?
+
+Tidak. Dahoo dapat digunakan dengan Local Intelligence.
+
+## Apakah WISMON memakai MySQL/PostgreSQL?
+
+Tidak. Database lokal menggunakan SQLite.
+
+## Berapa port default?
+
+```text
+127.0.0.1:8080
+```
+
+## Bagaimana menghentikan WISMON?
+
+Kembali ke terminal tempat WISMON berjalan dan tekan:
+
+```text
+Ctrl+C
+```
+
+---
+
+# 📌 Catatan untuk Contributor
+
+Sebelum membuat perubahan pada collector, engine, API, atau frontend, pertimbangkan:
+
+- Apakah perubahan menambah beban CPU?
+- Apakah perubahan menambah disk I/O?
+- Apakah data dapat berasal dari sumber yang tidak dipercaya?
+- Apakah output frontend dirender sebagai HTML?
+- Apakah tindakan remediation membutuhkan confirmation?
+- Apakah fitur tetap aman ketika permission Windows ditolak?
+- Apakah error dikembalikan ke UI dengan pesan yang dapat dipahami pengguna?
+
+Untuk perubahan UI, prioritaskan:
+
+```text
+Detect
+  ↓
+Explain
+  ↓
+Recommend
+  ↓
+Confirm
+  ↓
+Act
+  ↓
+Show Result
+```
+
+---
+
+# 📄 Lisensi
+
+Lihat file `LICENSE` pada repository untuk ketentuan lisensi project.
+
+---
+
+# 🔗 Repository
+
+GitHub:
+
+<https://github.com/Aiyub150/wismon>
