@@ -243,12 +243,14 @@ class App {
 
   async mitigateThreat(threatId, action) {
     const actionLabel = action === 'TERMINATE_PROCESS' 
-      ? 'Hentikan proses yang memicu ancaman ini' 
+      ? 'Hentikan (Kill) proses yang memicu ancaman ini' 
+      : (action === 'COOLDOWN_PROCESS' || action === 'THROTTLE_PROCESS')
+      ? 'Tangguhkan (pause) proses selama 3.5 detik untuk mendinginkan CPU lalu lanjutkan kembali secara normal'
       : action === 'FALSE_POSITIVE' 
       ? 'Tandai ancaman sebagai False Positive (Aman)' 
-      : 'Tandai ancaman sebagai Selesai / Resolved';
+      : 'Selesaikan anomali ini dan terapkan tindakan mitigasi sistem';
 
-    if (!confirm(`Konfirmasi Tindakan:\n${actionLabel}?\n\nPerubahan status akan dicatat dalam audit log.`)) {
+    if (!confirm(`Konfirmasi Tindakan Keamanan:\n${actionLabel}?\n\nTindakan nyata akan dieksekusi dan dicatat dalam audit log.`)) {
       return;
     }
     try {

@@ -2,64 +2,61 @@
 
 > **Monitor. Analyze. Understand.**
 
-**WISMON (Windows System Monitoring)** adalah aplikasi monitoring dan analisis profesional untuk sistem operasi Windows yang memberikan visibilitas real-time mendalam terhadap kinerja prosesor, memori kernel, penyimpanan disk, jaringan, proses, layanan, dan keamanan sistem.
+**WISMON (Windows System Monitoring)** adalah aplikasi monitoring, observabilitas, dan pemeliharaan performa sistem operasi Windows modern yang menyajikan visibilitas real-time mendalam terhadap kinerja CPU, memori kernel, adapter grafis (GPU), penyimpanan disk, jaringan, proses, layanan, dan keamanan sistem.
 
-Dibangun dengan fondasi UI **TailAdmin**, WISMON menghadirkan antarmuka sistem monitoring yang bersih, profesional, cepat, dan responsif dengan dukungan penuh **Dark Mode** dan **Light Mode**, menggantikan antarmuka generatif dengan konsol telemetri data-dense berstandar industri.
+Dibangun dengan fondasi antarmuka profesional berbasis desain **TailAdmin**, WISMON menghadirkan konsol telemetri berstandar industri dengan dukungan penuh **Dark Mode** dan **Light Mode**, arsitektur streaming Server-Sent Events (SSE) berkecepatan tinggi, serta asisten cerdas **Dahoo** dengan kapabilitas **Detect-Ask-Act**.
 
 ---
 
 ## ⚡ Fitur Utama
 
-1. **TailAdmin Professional UI Foundation**:
-   - Desain dashboard profesional terinspirasi dari TailAdmin Dashboard Template.
-   - Dukungan tema ganda: **Dark Mode** (Boxdark `#1A222C` / `#24303F`) dan **Light Mode** (`#F1F5F9` / `#FFFFFF`).
-   - Ikon vektor SVG standar industri tanpa elemen dekoratif berlebihan atau emoji non-profesional.
-   - Status koneksi real-time: `● LIVE` (pulsing dot hijau), `● RECONNECTING`, dan `● OFFLINE`.
+### 1. TailAdmin Professional UI Foundation
+- Antarmuka monitoring elegan terinspirasi dari TailAdmin Dashboard Template.
+- Dukungan tema ganda instan: **Dark Mode** (`#1A222C` / `#24303F`) dan **Light Mode** (`#F1F5F9` / `#FFFFFF`).
+- Indikator status telemetri real-time: `● LIVE` (pulsing dot hijau), `● RECONNECTING`, dan `● OFFLINE`.
+- Responsive layout yang dense dan fokus pada penyajian data metrik teknis tanpa ornamen visual berlebih.
 
-2. **Decoupled Real-Time Streaming Architecture**:
-   - Streaming telemetri Server-Sent Events (SSE) berkadensi ~1.0 detik langsung dari state in-memory tanpa jeda / lag 3–5 detik.
-   - Scheduler independen: telemetri ultra-cepat (CPU, RAM, GPU, Storage I/O, Network) dieksekusi instan (<10ms), sedangkan kolektor berat (`ProcessCollector`, `ServicesCollector`, `HardwareCollector`) diproses secara asinkron di thread worker terpisah (`asyncio.to_thread`).
-   - Penulisan database SQLite (WAL) dibatch per 5–10 frame untuk menjaga efisiensi SSD dan meminimalkan disk I/O.
+### 2. Native Windows PDH & ACPI Thermal Architecture
+- **Zero-Privilege Thermal Monitoring**: Menggunakan antarmuka native Windows Performance Data Helper (`pdh.dll`) via counter `\Thermal Zone Information(*)\High Precision Temperature`.
+- Pembacaan suhu CPU & SoC akurat (derajat Celsius) secara instan tanpa memerlukan hak akses Administrator atau driver kernel pihak ketiga.
+- Indikator visual meter / progress bar interaktif pada kartu KPI suhu di halaman Dashboard.
 
-3. **Monitoring First & No Fake Data**:
-   - Seluruh data diperoleh langsung dari Windows API aktual (`psutil`, `kernel32.dll`, `iphlpapi.dll`, `advapi32.dll`, WMI, ACPI thermal zones).
-   - Metrik yang tidak didukung oleh hardware atau BIOS ditandai eksplisit sebagai `Unavailable` atau `Not supported` — **tanpa data tiruan/palsu**.
+### 3. Universal Multi-GPU & Integrated Graphics Telemetry
+- Mendukung seluruh arsitektur grafis: **Intel Iris Xe**, **Intel UHD**, **AMD Radeon**, dan **NVIDIA GeForce / RTX**.
+- Integrasi Windows DirectX / WDDM PerfCounters untuk engine utilization (3D) dan alokasi memory VRAM (Dedicated & Shared System Memory).
+- Deteksi diode suhu dedicated via `nvidia-smi` untuk kartu diskrit, serta korelasi thermal package SoC untuk GPU terintegrasi.
+- Tampilan GPU & Hardware dinamis tanpa delay atau status stuck pada "Detecting...".
 
-4. **Dashboard Kesehatan Sistem & 8 KPI**:
-   - Health Score dinamis (0–100) berbasis beban CPU, tekanan memori, saturasi storage, dan ancaman aktif.
-   - 8 Kartu KPI: CPU Load, RAM, Storage, CPU Temperature, GPU Load, GPU Temperature, Network Throughput, dan Active Threats.
+### 4. Decoupled Real-Time Streaming Architecture
+- Streaming telemetri Server-Sent Events (SSE) berkadensi ~1.0 detik langsung dari state in-memory ring-buffer (300 sampel data).
+- Scheduler independen: telemetri cepat (CPU, RAM, GPU, Storage I/O, Network) dieksekusi instan (<10ms), sedangkan kolektor berat (`ProcessCollector`, `ServicesCollector`, `HardwareCollector`) diproses secara asinkron di worker thread terpisah (`asyncio.to_thread`).
+- Penulisan database SQLite (WAL) dibatch per 5–10 frame untuk menjaga efisiensi SSD dan meminimalkan disk I/O.
 
-5. **Analisis CPU & Per-Core Matrix**:
-   - Workload matrix per-core (logical dan physical cores).
-   - Frekuensi real-time (MHz), nama prosesor resmi dari Windows Registry, dan analisis beban kerja terhadap baseline historis.
+### 5. Threat Center & Security Events dengan Aksi Nyata (Active Remediation)
+- Deteksi otomatis anomali beban prosesor ekstrem, lonjakan koneksi mencurigakan, dan kepenuhan memori fisik.
+- **Tindakan Nyata Saat Resolve**:
+  - **High CPU Process**: Menangguhkan (*pause / suspend*) proses target selama 3.5 detik untuk mendinginkan prosesor dan menstabilkan beban sistem, lalu melanjutkannya (*resume*) secara normal.
+  - **RAM Exhaustion**: Membersihkan dan memangkas (*trim*) working set memory proses aktif via Windows API `EmptyWorkingSet`.
+  - **Malicious Process**: Opsi terminasi proses aman dengan konfirmasi eksplisit.
+- Setiap aksi tercatat dalam audit log dan riwayat database.
 
-6. **Deep Memory Architecture**:
-   - RAM fisik (Used, Available, Free, Cached).
-   - Metrik kernel Windows mendalam via `GetPerformanceInfo`: **Paged Pool**, **Non-Paged Pool**, **Commit Charge**, **Commit Limit**, System Cache, dan jumlah Handles.
+### 6. Dahoo Assistant 2.0 (Detect — Ask — Act)
+- Maskot pendamping cerdas dengan ekspresi wajah reaktif (`happy`, `normal`, `worried`, `alert`, `thinking`).
+- **Pola Detect-Ask-Act**:
+  - **Detect**: Memeriksa beban CPU, RAM, suhu, file sementara, dan ancaman secara berkelanjutan.
+  - **Ask**: Memberikan saran perbaikan kontekstual dilengkapi tombol aksi interaktif (misalnya `[⚡ Tangguhkan Proses (3.5s)]` atau `[⚡ Bebaskan Cache RAM]`).
+  - **Act**: Mengeksekusi perbaikan nyata saat tombol diklik atau saat pengguna menjawab setuju (*"ya"*, *"lakukan"*, *"ok"*).
+- **Pengenalan Bahasa Alami Offline**: Mampu memahami berbagai pertanyaan berbahasa Indonesia dan Inggris (seperti *"kenapa laptop lemot?"*, *"berapa suhu komputer?"*, *"bersihkan memori"*) secara fleksibel tanpa ketergantungan teks kaku atau peringatan API key yang tidak perlu.
+- **Proactive System Alerts**: Peringatan lonjakan CPU (>85%) atau ancaman keamanan otomatis disalurkan langsung sebagai bubble chat asisten di feed percakapan Dahoo.
+- **Mode Cloud AI Opsional**: Mendukung penalaran mendalam berbasis Google Gemini jika `GEMINI_API_KEY` dikonfigurasi di `.env`.
 
-7. **Storage & I/O Analytics + Storage Analyzer**:
-   - Partisi disk dengan tipe filesystem (NTFS, exFAT, dsb.).
-   - Live throughput disk (Read/Write MB/s dan operasi per detik).
-   - **Storage Analyzer**: Menemukan file berukuran besar (> 100 MB), file lama, dan file sementara di direktori User Temp tanpa pernah melakukan auto-delete (safety first).
+### 7. Storage Analyzer & Memory Deep Architecture
+- **Deep Memory**: Mengurai RAM fisik, Paged Pool, Non-Paged Pool, Commit Charge, Commit Limit, dan System Cache via `GetPerformanceInfo`.
+- **Storage Analyzer**: Menemukan file berukuran besar (> 100 MB), file lama (> 180 hari), dan pembersihan aman file sementara di folder Temp.
 
-8. **Network Throughput & Socket Explorer**:
-   - Informasi adapter aktif (Wi-Fi, Ethernet, IPv4, IPv6, MAC, Gateway, Link Speed).
-   - Throughput bandwidth real-time (Upload/Download).
-   - **Socket Explorer**: Menampilkan koneksi TCP/UDP aktif beserta resolusi hostname reverse-DNS secara asinkron dengan in-memory cache.
-
-9. **Process Explorer & Windows Services**:
-   - Daftar proses Windows dengan pencarian cepat, pengurutan fleksibel (CPU, RAM, Threads, Handles), modal inspeksi, dan dialog terminasi proses yang aman dengan konfirmasi eksplisit.
-   - Daftar Windows Services lengkap dengan visualisasi pohon hirarki proses **`svchost.exe`**.
-
-10. **Threat Center & Security Events**:
-    - Deteksi lonjakan koneksi mencurigakan, proses anomali ber-CPU ekstrem, dan saturasi memori kritis.
-    - Lifecycle event keamanan: `Detected` → `Analyzing` → `Confirmed / Suspicious / False Positive` → `Mitigation Recommended` → `User Action` → `Resolved`.
-    - Tindakan mitigasi aman (Terminate Process, Resolve, Flag False Positive).
-
-11. **Dahoo Hybrid Assistant**:
-    - Maskot pendamping cerdas dengan ekspresi wajah reaktif (`happy`, `normal`, `worried`, `alert`, `thinking`).
-    - **Local Engine (Offline, 0 Tokens)**: Menjawab pertanyaan umum kondisi sistem secara instan berdasarkan telemetry nyata.
-    - **Cloud AI (Gemini)**: Opsional menggunakan `google-genai` SDK jika `GEMINI_API_KEY` dikonfigurasi di `.env`, lengkap dengan kartu transparansi konsumsi token dan estimasi biaya per request.
+### 8. Network Throughput & Socket Explorer
+- Kecepatan unduh dan unggah real-time per adapter aktif (Wi-Fi, Ethernet).
+- Visualisasi koneksi TCP/UDP aktif beserta resolusi nama domain (reverse-DNS) asinkron.
 
 ---
 
@@ -68,24 +65,24 @@ Dibangun dengan fondasi UI **TailAdmin**, WISMON menghadirkan antarmuka sistem m
 ```
 ┌────────────────────────────────────────────────────────┐
 │                      Windows OS                        │
-│    Kernel32 / IP Helper / Advapi32 / WMI / Registry    │
+│    Kernel32 / PDH.dll / Advapi32 / DirectX / WMI       │
 └───────────────────────────┬────────────────────────────┘
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │                    Collector Layer                     │
-│  cpu.py | memory.py | storage.py | network.py          │
-│  process.py | socket.py | services.py | hardware.py    │
+│  cpu.py | memory.py | gpu.py | storage.py              │
+│  network.py | process.py | socket.py | temperature.py  │
 └───────────────────────────┬────────────────────────────┘
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│           Monitoring & Analysis Engine                 │
+│           Monitoring & Remediation Engine              │
 │  - Realtime Ring Buffer (300 samples)                  │
 │  - Analysis Engine (Baselines, Thresholds, Health)     │
-│  - Threat Center (Security lifecycle & rules)          │
-│  - Storage Analyzer (Large / Temp file scanner)        │
-│  - Dahoo Engine (Local Rule Router + Gemini Cloud)     │
+│  - Threat Center (Active Remediation & Cool Down)      │
+│  - Storage Analyzer (Temp / Large file scanner)        │
+│  - Dahoo Engine (Detect-Ask-Act + Gemini Cloud)        │
 └───────────────────────────┬────────────────────────────┘
                             │
               ┌─────────────┴─────────────┐
@@ -97,7 +94,7 @@ Dibangun dengan fondasi UI **TailAdmin**, WISMON menghadirkan antarmuka sistem m
                                           │
                                           ▼
                               ┌──────────────────────────┐
-                              │  Modern Frontend SPA     │
+                              │  TailAdmin Modern SPA    │
                               │  HTML5, CSS, Vanilla JS  │
                               └──────────────────────────┘
 ```
@@ -107,8 +104,8 @@ Dibangun dengan fondasi UI **TailAdmin**, WISMON menghadirkan antarmuka sistem m
 ## 📋 Persyaratan Sistem
 
 - **Sistem Operasi**: Windows 10 atau Windows 11 (64-bit)
-- **Python**: Versi 3.10 atau lebih baru (direkomendasikan Python 3.11+)
-- **Hak Akses**: Pengguna standar (Hak Administrator hanya diperlukan untuk menghentikan service atau proses sistem yang diproteksi)
+- **Python**: Versi 3.10 atau lebih baru (disarankan 3.11+)
+- **Hak Akses**: Pengguna standar (Hak Administrator hanya diperlukan untuk menghentikan service sistem terlindungi)
 
 ---
 
@@ -116,11 +113,11 @@ Dibangun dengan fondasi UI **TailAdmin**, WISMON menghadirkan antarmuka sistem m
 
 ### 1. Masuk ke Direktori Project
 ```powershell
-cd "c:\Users\aiyub\Desktop\System Monitoring"
+cd "c:\Users\nama\System Monitoring"
 ```
 
 ### 2. Aktifkan Virtual Environment & Pasang Dependensi
-Virtual environment `.venv` sudah tersedia di project:
+Virtual environment `.venv` sudah tersedia di repositori:
 ```powershell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -131,7 +128,7 @@ Salin berkas template `.env.example` menjadi `.env`:
 ```powershell
 cp .env.example .env
 ```
-Isi variabel yang diperlukan jika ingin mengaktifkan mode Cloud AI pada Dahoo:
+Isi konfigurasi jika ingin mengaktifkan mode Cloud AI pada Dahoo:
 ```env
 # Server
 HOST=127.0.0.1
@@ -139,9 +136,9 @@ PORT=8080
 
 # Dahoo Cloud AI (Opsional)
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.6-flash
 ```
-*Catatan: Tanpa `GEMINI_API_KEY`, Dahoo tetap dapat digunakan sepenuhnya secara offline via Local Engine.*
+*Catatan: Tanpa `GEMINI_API_KEY`, Dahoo tetap dapat digunakan sepenuhnya secara offline via Local Intelligence Engine.*
 
 ### 4. Jalankan Aplikasi
 Jalankan satu perintah tunggal:
@@ -151,13 +148,14 @@ python monitor.py
 Aplikasi akan menampilkan banner di konsol terminal:
 ```text
 =======================================
- Windows System Monitoring
+ WISMON — Windows System Monitoring
+ Monitor. Analyze. Understand.
 =======================================
 
 Backend : http://127.0.0.1:8080
 Frontend: http://127.0.0.1:8080
 
-Monitoring: ONLINE
+Monitoring: ONLINE (SSE Stream Active)
 
 CPU     : 18.5%
 Memory  : 52.3%
@@ -167,7 +165,7 @@ Press Ctrl+C to stop.
 =======================================
 ```
 
-Buka browser pada alamat: **`http://localhost:8080`**
+Buka browser pada alamat: **`http://127.0.0.1:8080`**
 
 ---
 
@@ -188,9 +186,9 @@ database/monitoring.db
 ## 🛡️ Prinsip Keamanan & Mitigasi
 
 - **Least Privilege**: Tidak memaksa pengguna menjalankan aplikasi sebagai Administrator.
-- **Konfirmasi Eksplisit**: Tindakan berbahaya (seperti mematikan proses `Terminate Process` atau menghentikan service) **selalu mewajibkan konfirmasi modal** dari pengguna.
+- **Konfirmasi Eksplisit**: Tindakan berbahaya (seperti mematikan proses `Terminate Process`) **selalu mewajibkan konfirmasi modal** dari pengguna.
 - **Perlindungan Kernel**: Proses inti sistem (PID 0, PID 4) tidak dapat dimatikan melalui API.
-- **Keamanan Kunci Rahasia**: Berkas `.env` dan database dikecualikan dari Git repository via `.gitignore`.
+- **Keamanan Berkas**: Berkas `.env`, folder `Bug/`, dan catatan markdown pengembangan dikecualikan dari Git repository via `.gitignore`.
 
 ---
 
@@ -205,28 +203,29 @@ database/monitoring.db
 │   ├── collectors/                # Kolektor telemetry terisolasi
 │   │   ├── cpu.py                 # CPU & per-core
 │   │   ├── memory.py              # RAM & kernel pools (Win32)
-│   │   ├── gpu.py                 # Telemetry GPU / Adapter
+│   │   ├── gpu.py                 # Telemetry GPU (PDH & DirectX)
 │   │   ├── storage.py             # Partisi disk & live I/O
 │   │   ├── network.py             # Adapter & throughput speed
 │   │   ├── process.py             # Enumerasi proses Windows
 │   │   ├── socket.py              # Koneksi jaringan & async DNS
 │   │   ├── services.py            # Windows services & svchost
-│   │   └── temperature.py         # ACPI thermal zones & baterai
+│   │   └── temperature.py         # Native PDH ACPI thermal zones & baterai
 │   ├── engine/                    # Mesin analisis & Dahoo
 │   │   ├── aggregator.py          # Ring buffer & SSE coordinator
 │   │   ├── analysis.py            # Baseline & health scoring
-│   │   ├── threat_center.py       # Security rules & threat lifecycle
-│   │   ├── storage_analyzer.py    # Pemindai file berukuran besar / temp
-│   │   └── dahoo_engine.py        # Asisten Dahoo (Local + Cloud)
+│   │   ├── threat_center.py       # Active remediation & cooldown engine
+│   │   ├── storage_analyzer.py    # Pemindai & pembersih file sementara
+│   │   └── dahoo_engine.py        # Asisten Dahoo (Detect-Ask-Act & Gemini)
 │   ├── api/                       # Router FastAPI REST & SSE
 │   └── main.py                    # Entrypoint aplikasi FastAPI
 ├── frontend/
-│   ├── index.html                 # Antarmuka web utama
+│   ├── index.html                 # Antarmuka web TailAdmin
 │   ├── css/                       # Desain sistem & tokens CSS
 │   └── js/                        # Engine charts, SSE, Dahoo & controller halaman
 ├── monitor.py                     # Skrip startup terpadu
 ├── requirements.txt               # Daftar dependensi Python
 ├── .env.example                   # Template konfigurasi environment
+├── .gitignore                     # Konfigurasi pengecualian Git
 └── README.md                      # Dokumentasi project
 ```
 

@@ -335,7 +335,10 @@
               <div class="kpi-value-row">
                 <span class="kpi-value font-mono" id="kpi-temp-val">--</span>
               </div>
-              <span class="kpi-subtext" id="kpi-temp-sub">ACPI Sensor</span>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-temp-bar" style="width: 0%;"></div>
+              </div>
+              <span class="kpi-subtext" id="kpi-temp-sub">ACPI Thermal Zone</span>
             </div>
 
             <!-- 5. GPU Utilization -->
@@ -346,11 +349,15 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="20" height="14" x="2" y="3" rx="2"/>
                     <line x1="8" x2="16" y1="21" y2="21"/>
+                    <line x1="12" x2="12" y1="17" y2="21"/>
                   </svg>
                 </div>
               </div>
               <div class="kpi-value-row">
                 <span class="kpi-value font-mono" id="kpi-gpu-val">--</span>
+              </div>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-gpu-bar" style="width: 0%;"></div>
               </div>
               <span class="kpi-subtext" id="kpi-gpu-sub">Display adapter</span>
             </div>
@@ -368,7 +375,10 @@
               <div class="kpi-value-row">
                 <span class="kpi-value font-mono" id="kpi-gputemp-val">--</span>
               </div>
-              <span class="kpi-subtext">Thermal diode</span>
+              <div class="progress-container">
+                <div class="progress-bar" id="kpi-gputemp-bar" style="width: 0%;"></div>
+              </div>
+              <span class="kpi-subtext" id="kpi-gputemp-sub">DirectX / SoC Sensor</span>
             </div>
 
             <!-- 7. Network Throughput -->

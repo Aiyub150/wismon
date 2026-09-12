@@ -138,13 +138,14 @@ class DahooController {
       });
     }
 
-    // Listen to real-time telemetry updates for reactive wolf emotions
+    // Listen to real-time telemetry updates for reactive wolf emotions & proactive alerts
     window.addEventListener('telemetry-update', (e) => {
       const snap = e.detail;
       const score = snap.health ? snap.health.score : 100;
       const threatCount = snap.threats ? snap.threats.length : 0;
       const cpu = snap.cpu ? snap.cpu.total_percent : 0;
       this.setEmotion(score, threatCount, cpu);
+      this.checkProactiveNotifications(snap);
     });
   }
 
@@ -214,7 +215,7 @@ class DahooController {
     } catch (e) {}
   }
 
-  appendMessage(role, text, meta = '') {
+  appendMessage(role, text, meta = '', action = null) {
     if (!this.chatBody) return;
     const msgDiv = document.createElement('div');
     msgDiv.className = `chat-msg ${role}`;
@@ -225,6 +226,37 @@ class DahooController {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
     bubble.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Render interactive Detect-Ask-Act action buttons
+    if (action && action.type) {
+      const actionBox = document.createElement('div');
+      actionBox.className = 'chat-action-box';
+      actionBox.style = 'display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;';
+
+      const actBtn = document.createElement('button');
+      actBtn.className = 'btn btn-primary btn-sm';
+      actBtn.style = 'padding: 4px 10px; font-size: 0.78rem; display: flex; align-items: center; gap: 4px;';
+      actBtn.innerHTML = `⚡ <strong>${escapeHtml(action.label || 'Jalankan Aksi')}</strong>`;
+      actBtn.onclick = () => {
+        actBtn.disabled = true;
+        actBtn.textContent = 'Menjalankan...';
+        this.executeDahooAction(action.type, action.params);
+      };
+      actionBox.appendChild(actBtn);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-secondary btn-sm';
+      cancelBtn.style = 'padding: 4px 10px; font-size: 0.78rem;';
+      cancelBtn.textContent = 'Abaikan';
+      cancelBtn.onclick = () => {
+        actionBox.remove();
+        this.appendMessage('assistant', 'Tindakan diabaikan. Hubungi aku lagi jika butuh bantuan! 🐺');
+      };
+      actionBox.appendChild(cancelBtn);
+
+      bubble.appendChild(actionBox);
+    }
+
     msgDiv.appendChild(bubble);
 
     const metaSpan = document.createElement('span');
@@ -238,6 +270,83 @@ class DahooController {
 
     this.chatBody.appendChild(msgDiv);
     this.chatBody.scrollTop = this.chatBody.scrollHeight;
+  }
+
+  async executeDahooAction(actionType, params = {}) {
+    this.showTypingIndicator();
+    try {
+      const res = await fetch('/api/dahoo/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action_type: actionType, params: params })
+      });
+      this.removeTypingIndicator();
+      if (res.ok) {
+        const data = await res.json();
+        const icon = data.success ? '✅' : '⚠️';
+        this.appendMessage('assistant', `${icon} **Laporan Tindakan Perbaikan:**\n\n${data.message || 'Tindakan berhasil dieksekusi.'}`, 'Dahoo Action Engine');
+      } else {
+        this.appendMessage('assistant', '⚠️ Gagal mengeksekusi tindakan perbaikan.', 'Dahoo Action Engine');
+      }
+    } catch (e) {
+      this.removeTypingIndicator();
+      this.appendMessage('assistant', `⚠️ Gagal menghubungi server: ${e.message}`);
+    }
+  }
+
+  checkProactiveNotifications(snap) {
+    if (!snap) return;
+    const now = Date.now();
+    if (!this._notifiedThreats) this._notifiedThreats = new Set();
+    if (!this._lastAlertTime) this._lastAlertTime = 0;
+
+    // 1. Proactive Security Threat Alert in Chat
+    const threats = snap.threats || [];
+    for (const t of threats) {
+      if (!this._notifiedThreats.has(t.id)) {
+        this._notifiedThreats.add(t.id);
+        const action = t.pid
+          ? { type: 'COOLDOWN_PROCESS', label: `Tangguhkan Proses ${t.target} (3.5s)`, params: { pid: t.pid, name: t.target } }
+          : { type: 'RESOLVE_THREAT', label: 'Mitigasi Ancaman Ini', params: { threat_id: t.id } };
+
+        this.appendMessage(
+          'assistant',
+          `🔔 **Peringatan Keamanan Sistem!**\n\nTerdeteksi anomali: **${t.category}** pada **${t.target}**.\n*Keterangan*: ${t.reason}\n\nApakah kamu ingin aku bantu menstabilkan anomali ini sekarang?`,
+          'Proactive System Alert',
+          action
+        );
+
+        if (this.speechBubble && !this.drawer.classList.contains('open')) {
+          this.speechBubble.textContent = `Aww! Ada anomali keamanan: ${t.category}`;
+          this.speechBubble.style.display = 'block';
+        }
+      }
+    }
+
+    // 2. Proactive High CPU Spike Alert in Chat (throttled once per 90s)
+    const cpuVal = snap.cpu ? snap.cpu.total_percent : 0;
+    if (cpuVal > 85 && (now - this._lastAlertTime > 90000)) {
+      this._lastAlertTime = now;
+      const topProc = snap.process?.top_cpu?.find(p => p.pid > 0 && !p.name.toLowerCase().includes('idle'));
+      if (topProc && topProc.cpu_percent > 25) {
+        const action = {
+          type: 'COOLDOWN_PROCESS',
+          label: `Tangguhkan ${topProc.name} (3.5s)`,
+          params: { pid: topProc.pid, name: topProc.name }
+        };
+        this.appendMessage(
+          'assistant',
+          `🔔 **Peringatan Beban CPU Tinggi!**\n\nBeban CPU melonjak ke **${cpuVal}%**! Proses **${topProc.name}** (PID: ${topProc.pid}) menyerap **${topProc.cpu_percent}% CPU**.\n\nMau aku bantu menangguhkan proses ini selama 3.5 detik agar suhu dan CPU stabil kembali?`,
+          'Proactive System Alert',
+          action
+        );
+
+        if (this.speechBubble && !this.drawer.classList.contains('open')) {
+          this.speechBubble.textContent = `CPU tinggi (${cpuVal}%) pada ${topProc.name}!`;
+          this.speechBubble.style.display = 'block';
+        }
+      }
+    }
   }
 
   showTypingIndicator() {
@@ -289,8 +398,8 @@ class DahooController {
         const data = await res.json();
         const metaText = data.engine === 'cloud' 
           ? `${data.model} (${data.input_tokens + data.output_tokens} tok)`
-          : 'Local Rule Engine';
-        this.appendMessage('assistant', data.reply, metaText);
+          : 'Local Intelligence Engine';
+        this.appendMessage('assistant', data.reply, metaText, data.action);
         this.updateMetrics();
       } else {
         this.appendMessage('assistant', 'Aww, maaf terjadi kendala saat memproses permintaanmu. Coba tanyakan kembali.');

@@ -160,6 +160,32 @@ class StorageAnalyzer:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def clean_user_temp_files(self) -> Dict[str, Any]:
+        """Safely cleans unlocked files in the User Temp folder."""
+        user_profile = Path(os.environ.get("USERPROFILE", "C:\\"))
+        temp_dir = Path(os.environ.get("TEMP", user_profile / "AppData" / "Local" / "Temp"))
+        cleaned_files = 0
+        freed_bytes = 0
+        if temp_dir.exists():
+            for root, _, files in os.walk(temp_dir):
+                for f in files:
+                    fp = Path(root) / f
+                    try:
+                        sz = fp.stat().st_size
+                        fp.unlink()
+                        cleaned_files += 1
+                        freed_bytes += sz
+                    except Exception:
+                        # Skip locked or in-use files
+                        pass
+        freed_mb = round(freed_bytes / (1024 * 1024), 2)
+        return {
+            "success": True,
+            "cleaned_files": cleaned_files,
+            "freed_mb": freed_mb,
+            "message": f"Berhasil membersihkan {cleaned_files} file sementara ({freed_mb} MB) dari direktori Temp."
+        }
+
     def get_last_scan(self) -> Dict[str, Any]:
         if not self._last_scan:
             return self.scan()

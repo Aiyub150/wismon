@@ -61,6 +61,48 @@ class GPUCollector(BaseCollector):
         except Exception as e:
             logger.debug(f"PDH initialization for GPU skipped or failed: {e}")
 
+        # Also initialize thermal counter for integrated GPUs / SoC thermals
+        self._thermal_pdh_query = None
+        self._thermal_pdh_cnt = None
+        self._thermal_is_high = True
+        self._init_thermal_pdh()
+
+    def _init_thermal_pdh(self):
+        try:
+            pdh = ctypes.windll.pdh
+            tq = wintypes.HANDLE()
+            if pdh.PdhOpenQueryW(None, 0, ctypes.byref(tq)) == 0:
+                tcnt = wintypes.HANDLE()
+                if pdh.PdhAddEnglishCounterW(tq, '\\Thermal Zone Information(*)\\High Precision Temperature', 0, ctypes.byref(tcnt)) == 0:
+                    self._thermal_pdh_query = tq
+                    self._thermal_pdh_cnt = tcnt
+                    self._thermal_is_high = True
+                    pdh.PdhCollectQueryData(tq)
+                elif pdh.PdhAddEnglishCounterW(tq, '\\Thermal Zone Information(*)\\Temperature', 0, ctypes.byref(tcnt)) == 0:
+                    self._thermal_pdh_query = tq
+                    self._thermal_pdh_cnt = tcnt
+                    self._thermal_is_high = False
+                    pdh.PdhCollectQueryData(tq)
+        except Exception:
+            pass
+
+    def _get_soc_temperature(self) -> Optional[float]:
+        """Queries the SoC package thermal zone for integrated display adapters."""
+        if not self._thermal_pdh_query or not self._thermal_pdh_cnt:
+            return None
+        try:
+            pdh = ctypes.windll.pdh
+            if pdh.PdhCollectQueryData(self._thermal_pdh_query) == 0:
+                fmt = PDH_FMT_COUNTERVALUE_DOUBLE()
+                if pdh.PdhGetFormattedCounterValue(self._thermal_pdh_cnt, 0x200, None, ctypes.byref(fmt)) == 0:
+                    raw = fmt.doubleValue
+                    c = round((raw / 10.0) - 273.15, 1) if self._thermal_is_high else round(raw - 273.15, 1)
+                    if 0 < c < 125:
+                        return c
+        except Exception:
+            pass
+        return None
+
     def _detect_static_gpus(self) -> List[Dict[str, Any]]:
         """Queries Win32_VideoController for installed display adapters."""
         gpus = []
@@ -233,6 +275,9 @@ class GPUCollector(BaseCollector):
                 if vram_used > vram_total:
                     vram_total = max(vram_total, vram_used + 1024 * 1024 * 1024)
 
+                # For integrated GPU or GPU without dedicated driver diode, query SoC thermal zone
+                gpu_temp = self._get_soc_temperature()
+
                 gpus_out.append({
                     "id": len(gpus_out),
                     "name": sg["name"],
@@ -241,7 +286,7 @@ class GPUCollector(BaseCollector):
                     "vram_total_bytes": int(vram_total),
                     "vram_used_bytes": int(vram_used),
                     "vram_type": "Shared Memory (D3D/DirectX)" if not sg.get("is_discrete") else "Dedicated VRAM",
-                    "temperature_c": None, # Temperature is sensor-dependent (unavailable without OEM proprietary drivers)
+                    "temperature_c": gpu_temp,
                     "clock_mhz": None,
                     "power_watts": None,
                     "driver_version": sg["driver_version"],

@@ -61,17 +61,24 @@ class SecurityPage {
             <div style="font-size: 0.78rem; color: var(--color-primary);">
               💡 <strong>Recommendation:</strong> ${escapeHtml(t.recommended_action)}
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               ${t.pid ? `
+                <button class="btn btn-primary btn-sm" onclick="app.mitigateThreat('${t.id}', 'COOLDOWN_PROCESS')" title="Tangguhkan proses 3.5s untuk mendinginkan CPU lalu lanjutkan normal">
+                  ⏱️ Resolve & Cooldown (3.5s)
+                </button>
                 <button class="btn btn-danger btn-sm" onclick="app.mitigateThreat('${t.id}', 'TERMINATE_PROCESS')">
                   Terminate Process
                 </button>
-              ` : ''}
+              ` : `
+                <button class="btn btn-primary btn-sm" onclick="app.mitigateThreat('${t.id}', 'RESOLVE')">
+                  🛠️ Resolve & Mitigate
+                </button>
+              `}
               <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'RESOLVE')">
-                Mark as Resolved
+                Resolve
               </button>
               <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'FALSE_POSITIVE')">
-                Mark as False Positive
+                False Positive
               </button>
             </div>
           </div>

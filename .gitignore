@@ -32,3 +32,10 @@ scratch/
 Thumbs.db
 .vscode/
 .idea/
+
+# Exclude Bug folder and markdown files (except README.md)
+/Bug/
+Bug/
+*.md
+!README.md
+

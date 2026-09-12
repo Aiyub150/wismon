@@ -3,6 +3,7 @@ Dahoo Assistant REST API Routes for Windows System Monitoring.
 Provides chat interactions, dynamic mascot expressions, and AI cost transparency metrics.
 """
 
+from typing import Optional, Dict, Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 from backend.engine.dahoo_engine import dahoo_engine
@@ -16,10 +17,18 @@ class ChatRequest(BaseModel):
     message: str
     use_cloud: bool = False
 
+class ActionRequest(BaseModel):
+    action_type: str
+    params: Optional[Dict[str, Any]] = None
+
 @router.post("/chat")
 async def chat_with_dahoo(req: ChatRequest):
     telemetry = aggregator.latest_snapshot or {}
     return await dahoo_engine.chat(req.message, telemetry, use_cloud=req.use_cloud)
+
+@router.post("/action")
+async def execute_dahoo_action(req: ActionRequest):
+    return await dahoo_engine.execute_action(req.action_type, req.params)
 
 @router.get("/state")
 async def get_dahoo_state():

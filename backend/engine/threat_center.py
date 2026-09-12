@@ -109,6 +109,61 @@ class ThreatCenter:
     def get_threats(self) -> List[Dict[str, Any]]:
         return list(self._active_threats.values())
 
+    async def throttle_and_cooldown_process(self, pid: int, duration: float = 3.5) -> Dict[str, Any]:
+        """
+        Active remediation for High CPU Process:
+        Temporarily pauses (suspends) the runaway process for 3.5s to immediately relieve CPU stress,
+        cool down temperatures, and resumes execution seamlessly.
+        """
+        import psutil
+        import asyncio
+        if not psutil.pid_exists(pid):
+            return {"success": False, "message": f"Process PID {pid} no longer active."}
+        try:
+            p = psutil.Process(pid)
+            pname = p.name()
+            # Suspend the process
+            p.suspend()
+
+            # Background task to resume after cooldown duration
+            async def _resume_worker(proc, delay, name, target_pid):
+                await asyncio.sleep(delay)
+                try:
+                    if proc.is_running():
+                        proc.resume()
+                except Exception:
+                    pass
+
+            asyncio.create_task(_resume_worker(p, duration, pname, pid))
+            return {
+                "success": True,
+                "message": f"Proses {pname} (PID: {pid}) ditangguhkan sejenak ({duration} detik) untuk mendinginkan CPU lalu kembali normal."
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Gagal menangguhkan proses PID {pid}: {str(e)}"}
+
+    def trim_system_memory(self) -> Dict[str, Any]:
+        """
+        Active remediation for Memory Exhaustion:
+        Trims process working sets to release unneeded committed pages.
+        """
+        import ctypes
+        import psutil
+        trimmed_count = 0
+        try:
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    handle = ctypes.windll.kernel32.OpenProcess(0x001F0FFF, False, proc.info['pid'])
+                    if handle:
+                        ctypes.windll.psapi.EmptyWorkingSet(handle)
+                        ctypes.windll.kernel32.CloseHandle(handle)
+                        trimmed_count += 1
+                except Exception:
+                    pass
+            return {"success": True, "message": f"Memory working set berhasil dibebaskan di {trimmed_count} proses aktif."}
+        except Exception as e:
+            return {"success": False, "message": f"Gagal membebaskan memori: {str(e)}"}
+
     async def update_threat_status(self, threat_id: str, new_status: str, action: Optional[str] = None):
         if threat_id in self._active_threats:
             t = self._active_threats[threat_id]

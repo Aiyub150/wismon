@@ -17,68 +17,95 @@ class HardwarePage {
     const battery = hw.battery || {};
     const thermal = hw.thermal || {};
 
-    // 1. Dynamic Multi-GPU Rendering (Intel, AMD, NVIDIA)
+    // 1. Dynamic GPU Rendering (Intel Iris Xe, AMD Radeon, NVIDIA GeForce)
+    const nameEl = document.getElementById('hw-gpu-name');
+    const statusEl = document.getElementById('hw-gpu-status');
+    const usageEl = document.getElementById('hw-gpu-usage');
+    const vramEl = document.getElementById('hw-gpu-vram');
+    const tempEl = document.getElementById('hw-gpu-temp');
+
+    if (gpu && gpu.available) {
+      if (nameEl) nameEl.textContent = gpu.name || 'Primary GPU';
+      if (statusEl) {
+        statusEl.textContent = gpu.vendor ? `${gpu.vendor} (${gpu.status || 'Active'})` : 'Online';
+        statusEl.className = gpu.vendor === 'NVIDIA' ? 'badge badge-healthy' : gpu.vendor === 'Intel' ? 'badge badge-info' : 'badge badge-primary';
+      }
+      const util = gpu.usage_percent !== null && gpu.usage_percent !== undefined ? gpu.usage_percent : 0;
+      if (usageEl) usageEl.textContent = `${util}%`;
+
+      const vramTotalMb = gpu.vram_total_bytes ? (gpu.vram_total_bytes / (1024**2)).toFixed(0) : '—';
+      const vramUsedMb = gpu.vram_used_bytes ? (gpu.vram_used_bytes / (1024**2)).toFixed(0) : '—';
+      if (vramEl) vramEl.textContent = `${vramUsedMb} / ${vramTotalMb} MB`;
+
+      const tempVal = gpu.temperature_c !== null && gpu.temperature_c !== undefined 
+        ? `${gpu.temperature_c}°C` 
+        : (hw.thermal?.cpu_temp_c ? `${hw.thermal.cpu_temp_c}°C` : 'SoC Diode');
+      if (tempEl) tempEl.textContent = tempVal;
+    } else {
+      if (nameEl) nameEl.textContent = 'Integrated Display Adapter';
+      if (statusEl) {
+        statusEl.textContent = 'Active';
+        statusEl.className = 'badge badge-info';
+      }
+      if (usageEl) usageEl.textContent = '0%';
+      if (vramEl) vramEl.textContent = 'Shared Memory';
+      if (tempEl) tempEl.textContent = hw.thermal?.cpu_temp_c ? `${hw.thermal.cpu_temp_c}°C` : 'Active';
+    }
+
+    // Dynamic Multi-GPU container (if present in custom views)
     const gpuContainer = document.getElementById('hw-gpus-container') || document.getElementById('hw-gpu-card');
     const gpusList = gpu.gpus || [];
 
-    if (gpuContainer) {
-      if (gpusList.length > 0) {
-        gpuContainer.innerHTML = gpusList.map(g => {
-          const vramTotalMb = g.vram_total_bytes ? (g.vram_total_bytes / (1024**2)).toFixed(0) : '—';
-          const vramUsedMb = g.vram_used_bytes ? (g.vram_used_bytes / (1024**2)).toFixed(0) : '—';
-          const utilVal = g.usage_percent !== null && g.usage_percent !== undefined ? g.usage_percent : 0;
-          const tempVal = g.temperature_c !== null && g.temperature_c !== undefined ? `${g.temperature_c}°C` : 'Sensor unavailable';
+    if (gpuContainer && gpusList.length > 0) {
+      gpuContainer.innerHTML = gpusList.map(g => {
+        const vramTotalMb = g.vram_total_bytes ? (g.vram_total_bytes / (1024**2)).toFixed(0) : '—';
+        const vramUsedMb = g.vram_used_bytes ? (g.vram_used_bytes / (1024**2)).toFixed(0) : '—';
+        const utilVal = g.usage_percent !== null && g.usage_percent !== undefined ? g.usage_percent : 0;
+        const tempVal = g.temperature_c !== null && g.temperature_c !== undefined ? `${g.temperature_c}°C` : 'SoC Diode';
 
-          const vendorBadge = g.vendor === 'NVIDIA' ? 'badge-healthy' : g.vendor === 'Intel' ? 'badge-info' : 'badge-primary';
+        const vendorBadge = g.vendor === 'NVIDIA' ? 'badge-healthy' : g.vendor === 'Intel' ? 'badge-info' : 'badge-primary';
 
-          return `
-            <div class="card" style="margin-bottom: 1rem;">
-              <div class="card-header" style="margin-bottom: 0.8rem; padding-bottom: 0.6rem;">
-                <div class="card-title">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
-                    <rect width="20" height="14" x="2" y="3" rx="2"/>
-                    <line x1="8" x2="16" y1="21" y2="21"/>
-                    <line x1="12" x2="12" y1="17" y2="21"/>
-                  </svg>
-                  <span>${escapeHtml(g.name)}</span>
-                </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <span class="badge ${vendorBadge} font-mono">${g.vendor}</span>
-                  <span class="badge badge-neutral font-mono">${g.is_discrete ? 'Discrete' : 'Integrated'}</span>
-                </div>
+        return `
+          <div class="card" style="margin-bottom: 1rem;">
+            <div class="card-header" style="margin-bottom: 0.8rem; padding-bottom: 0.6rem;">
+              <div class="card-title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+                  <rect width="20" height="14" x="2" y="3" rx="2"/>
+                  <line x1="8" x2="16" y1="21" y2="21"/>
+                  <line x1="12" x2="12" y1="17" y2="21"/>
+                </svg>
+                <span>${escapeHtml(g.name)}</span>
               </div>
-
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
-                <div>
-                  <div class="text-muted" style="font-size: 0.75rem;">Engine Utilization (3D)</div>
-                  <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-display); color: var(--color-primary);">${utilVal}%</div>
-                  <div class="progress-container" style="height: 6px; margin-top: 0.4rem;">
-                    <div class="progress-bar ${utilVal > 80 ? 'critical' : utilVal > 50 ? 'warning' : ''}" style="width: ${Math.min(100, utilVal)}%;"></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div class="text-muted" style="font-size: 0.75rem;">Graphics Memory (VRAM)</div>
-                  <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono);">${vramUsedMb} / ${vramTotalMb} MB</div>
-                  <div class="text-muted font-mono" style="font-size: 0.7rem; margin-top: 0.2rem;">${escapeHtml(g.vram_type || 'DirectX Shared / Dedicated')}</div>
-                </div>
-
-                <div>
-                  <div class="text-muted" style="font-size: 0.75rem;">Temperature & Thermals</div>
-                  <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary);">${tempVal}</div>
-                  <div class="text-muted" style="font-size: 0.7rem; margin-top: 0.2rem;">Driver: ${escapeHtml(g.driver_version || 'WDDM Driver')}</div>
-                </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span class="badge ${vendorBadge} font-mono">${g.vendor}</span>
+                <span class="badge badge-neutral font-mono">${g.is_discrete ? 'Discrete' : 'Integrated'}</span>
               </div>
             </div>
-          `;
-        }).join('');
-      } else {
-        gpuContainer.innerHTML = `
-          <div class="card">
-            <div class="text-muted text-center" style="padding: 1.5rem;">No graphics processing units detected.</div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+              <div>
+                <div class="text-muted" style="font-size: 0.75rem;">Engine Utilization (3D)</div>
+                <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-display); color: var(--color-primary);">${utilVal}%</div>
+                <div class="progress-container" style="height: 6px; margin-top: 0.4rem;">
+                  <div class="progress-bar ${utilVal > 80 ? 'critical' : utilVal > 50 ? 'warning' : ''}" style="width: ${Math.min(100, utilVal)}%;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="text-muted" style="font-size: 0.75rem;">Graphics Memory (VRAM)</div>
+                <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono);">${vramUsedMb} / ${vramTotalMb} MB</div>
+                <div class="text-muted font-mono" style="font-size: 0.7rem; margin-top: 0.2rem;">${escapeHtml(g.vram_type || 'DirectX Shared / Dedicated')}</div>
+              </div>
+
+              <div>
+                <div class="text-muted" style="font-size: 0.75rem;">Temperature & Thermals</div>
+                <div style="font-size: 1.15rem; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary);">${tempVal}</div>
+                <div class="text-muted" style="font-size: 0.7rem; margin-top: 0.2rem;">Driver: ${escapeHtml(g.driver_version || 'WDDM Driver')}</div>
+              </div>
+            </div>
           </div>
         `;
-      }
+      }).join('');
     }
 
     // 2. Battery Card

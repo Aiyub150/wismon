@@ -76,27 +76,45 @@ class DashboardPage {
     this.setElemText('kpi-storage-sub', `${storFreeGb} GB Free`);
     this.setElemWidth('kpi-storage-bar', `${storVal}%`, storVal > 90 ? 'critical' : '');
 
-    // Thermal KPI
+    // Thermal KPI (CPU)
     const thermal = snap.hardware ? snap.hardware.thermal : {};
     if (thermal && thermal.cpu_temp_c !== null && thermal.cpu_temp_c !== undefined) {
-      this.setElemText('kpi-temp-val', `${thermal.cpu_temp_c}°C`);
-      this.setElemText('kpi-temp-sub', 'ACPI Sensor');
+      const cTemp = thermal.cpu_temp_c;
+      this.setElemText('kpi-temp-val', `${cTemp}°C`);
+      this.setElemText('kpi-temp-sub', 'ACPI Thermal Zone');
+      const tempPercent = Math.min(100, Math.max(0, (cTemp / 100) * 100));
+      this.setElemWidth('kpi-temp-bar', `${tempPercent}%`, cTemp > 85 ? 'critical' : cTemp > 70 ? 'warning' : '');
     } else {
       this.setElemText('kpi-temp-val', 'Unavailable');
-      this.setElemText('kpi-temp-sub', 'Not exposed by BIOS');
+      this.setElemText('kpi-temp-sub', 'Thermal zone inactive');
+      this.setElemWidth('kpi-temp-bar', '0%');
     }
 
     // GPU Usage & Temp (Dynamic Multi-GPU Support)
     if (gpu && gpu.available) {
       const gpuName = gpu.name || 'Primary GPU';
-      const gpuUtil = gpu.usage_percent !== null && gpu.usage_percent !== undefined ? `${gpu.usage_percent}%` : 'Unavailable';
-      this.setElemText('kpi-gpu-val', gpuUtil);
+      const gpuUtil = gpu.usage_percent !== null && gpu.usage_percent !== undefined ? gpu.usage_percent : 0;
+      this.setElemText('kpi-gpu-val', `${gpuUtil}%`);
       this.setElemText('kpi-gpu-sub', `${gpuName} (${gpu.vendor || 'GPU'})`);
-      this.setElemText('kpi-gputemp-val', gpu.temperature_c !== null && gpu.temperature_c !== undefined ? `${gpu.temperature_c}°C` : 'Unavailable');
+      this.setElemWidth('kpi-gpu-bar', `${Math.min(100, gpuUtil)}%`, gpuUtil > 80 ? 'critical' : gpuUtil > 60 ? 'warning' : '');
+
+      if (gpu.temperature_c !== null && gpu.temperature_c !== undefined) {
+        const gTemp = gpu.temperature_c;
+        this.setElemText('kpi-gputemp-val', `${gTemp}°C`);
+        this.setElemText('kpi-gputemp-sub', gpu.is_discrete ? 'Dedicated Diode' : 'SoC Package Diode');
+        const gTempPercent = Math.min(100, Math.max(0, (gTemp / 100) * 100));
+        this.setElemWidth('kpi-gputemp-bar', `${gTempPercent}%`, gTemp > 85 ? 'critical' : gTemp > 70 ? 'warning' : '');
+      } else {
+        this.setElemText('kpi-gputemp-val', 'Unavailable');
+        this.setElemText('kpi-gputemp-sub', 'Sensor diode offline');
+        this.setElemWidth('kpi-gputemp-bar', '0%');
+      }
     } else {
       this.setElemText('kpi-gpu-val', 'Not available');
-      this.setElemText('kpi-gpu-sub', 'Integrated graphics');
+      this.setElemText('kpi-gpu-sub', 'No display adapter');
+      this.setElemWidth('kpi-gpu-bar', '0%');
       this.setElemText('kpi-gputemp-val', 'Not available');
+      this.setElemWidth('kpi-gputemp-bar', '0%');
     }
 
     // Network Throughput

@@ -34,6 +34,9 @@ async def mitigate_threat(req: MitigateRequest):
     if not target_threat:
         raise HTTPException(status_code=404, detail="Threat event not found.")
 
+    action_msg = "Threat marked as resolved."
+    action_log = "Manually marked resolved by user."
+
     if req.action == "TERMINATE_PROCESS":
         pid = target_threat.get("pid")
         if not pid:
@@ -41,12 +44,37 @@ async def mitigate_threat(req: MitigateRequest):
         term_res = aggregator.process_collector.terminate_process(pid)
         if not term_res["success"]:
             raise HTTPException(status_code=500, detail=term_res["message"])
-        await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=f"Terminated process PID {pid}")
-        return {"success": True, "message": f"Threat mitigated: Process {pid} terminated."}
+        action_log = f"Terminated process PID {pid}"
+        action_msg = f"Threat mitigated: Process {pid} terminated."
+        await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
+        return {"success": True, "message": action_msg}
 
-    elif req.action == "RESOLVE":
-        await threat_center.update_threat_status(req.threat_id, "RESOLVED", action="Manually marked resolved by user.")
-        return {"success": True, "message": "Threat marked as resolved."}
+    elif req.action in ("RESOLVE", "COOLDOWN_PROCESS", "THROTTLE_PROCESS"):
+        category = target_threat.get("category", "")
+        pid = target_threat.get("pid")
+
+        # 1. High CPU Process Remediation: Pause / Cooldown for 3.5s then resume
+        if (category == "High CPU Process" or req.action in ("COOLDOWN_PROCESS", "THROTTLE_PROCESS")) and pid:
+            cool_res = await threat_center.throttle_and_cooldown_process(pid, duration=3.5)
+            if cool_res["success"]:
+                action_log = f"Proses PID {pid} ditangguhkan 3.5 detik untuk pendinginan CPU lalu dilanjutkan."
+                action_msg = cool_res["message"]
+            else:
+                action_log = f"Upaya penangguhan proses PID {pid}: {cool_res['message']}"
+                action_msg = cool_res["message"]
+
+        # 2. Memory Exhaustion Remediation: Trim working set memory
+        elif category == "System Anomaly" or "Memory" in category:
+            trim_res = threat_center.trim_system_memory()
+            action_log = trim_res["message"]
+            action_msg = f"Mitigasi Memori Selesai: {trim_res['message']}"
+
+        else:
+            action_log = "Status diverifikasi dan diselesaikan oleh administrator sistem."
+            action_msg = "Anomali berhasil diselesaikan dan dicatat."
+
+        await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
+        return {"success": True, "message": action_msg}
 
     elif req.action == "FALSE_POSITIVE":
         await threat_center.update_threat_status(req.threat_id, "FALSE_POSITIVE", action="Flagged as false positive by user.")
