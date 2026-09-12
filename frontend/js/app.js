@@ -209,7 +209,7 @@ class App {
         if (this.inspectModal) this.inspectModal.classList.add('active');
       }
     } catch (e) {
-      alert('Error fetching process details: ' + e.message);
+      this.showToast('danger', 'Error fetching process details: ' + e.message, 'Proses Error');
     }
   }
 
@@ -230,14 +230,14 @@ class App {
       });
       const data = await res.json();
       if (res.ok) {
-        this.showToast('success', data.message || 'Process terminated.');
+        this.showToast('success', data.message || 'Process terminated.', 'Proses Dihentikan');
         this.closeAllModals();
         if (window.processesPage) window.processesPage.fetchProcesses();
       } else {
-        this.showToast('danger', data.detail || 'Termination failed.');
+        this.showToast('danger', data.detail || 'Termination failed.', 'Gagal Menghentikan');
       }
     } catch (e) {
-      this.showToast('danger', 'Communication error: ' + e.message);
+      this.showToast('danger', 'Communication error: ' + e.message, 'Kesalahan Jaringan');
     }
   }
 
@@ -250,25 +250,35 @@ class App {
       ? 'Tandai ancaman sebagai False Positive (Aman)' 
       : 'Selesaikan anomali ini dan terapkan tindakan mitigasi sistem';
 
-    if (!confirm(`Konfirmasi Tindakan Keamanan:\n${actionLabel}?\n\nTindakan nyata akan dieksekusi dan dicatat dalam audit log.`)) {
-      return;
-    }
-    try {
-      const res = await fetch('/api/security/mitigate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threat_id: threatId, action: action, confirm: true })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        this.showToast('success', data.message || 'Tindakan keamanan berhasil dieksekusi.');
-        if (window.securityPage) window.securityPage.fetchEventHistory();
-      } else {
-        this.showToast('danger', data.detail || 'Tindakan gagal dijalankan.');
-      }
-    } catch (e) {
-      this.showToast('danger', 'Error komunikasi: ' + e.message);
-    }
+    this.showConfirm(
+      'Konfirmasi Mitigasi Keamanan',
+      `${actionLabel}?\n\nTindakan nyata akan dieksekusi oleh sistem dan dicatat ke dalam audit log.`,
+      async () => {
+        try {
+          const res = await fetch('/api/security/mitigate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threat_id: threatId, action: action, confirm: true })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            this.showToast('success', data.message || 'Tindakan keamanan berhasil dieksekusi.', 'Mitigasi Berhasil');
+            if (window.securityPage) window.securityPage.fetchEventHistory();
+          } else {
+            const msg = data.detail || data.message || 'Tindakan mitigasi tidak dapat diselesaikan.';
+            this.showToast('danger', msg, 'Mitigasi Gagal');
+            if (window.securityPage && data.can_fallback) {
+              window.securityPage.showFallbackOptions(threatId, data);
+            }
+          }
+        } catch (e) {
+          this.showToast('danger', 'Error komunikasi dengan server: ' + e.message, 'Koneksi Terputus');
+        }
+      },
+      'Eksekusi',
+      'Batal',
+      action === 'TERMINATE_PROCESS' ? 'critical' : 'warning'
+    );
   }
 
   toggleSearchModal(open) {
@@ -317,23 +327,104 @@ class App {
     `).join('') || '<div class="text-muted text-center" style="padding: 1rem;">No matching pages or items.</div>';
   }
 
-  showToast(type, message) {
+  showToast(type, message, title = '', duration = 4000) {
+    let container = document.getElementById('wismon-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'wismon-toast-container';
+      container.className = 'wismon-toast-container';
+      document.body.appendChild(container);
+    }
+
     const toast = document.createElement('div');
-    toast.className = `badge badge-${type === 'success' ? 'healthy' : 'critical'}`;
-    toast.style.position = 'fixed';
-    toast.style.bottom = '85px';
-    toast.style.right = '24px';
-    toast.style.zIndex = '999';
-    toast.style.padding = '0.65rem 1.1rem';
-    toast.style.fontSize = '0.8125rem';
-    toast.style.boxShadow = 'var(--shadow-lg)';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3500);
+    const normType = type === 'danger' ? 'error' : (type || 'info');
+    toast.className = `wismon-toast toast-${normType}`;
+
+    const iconMap = {
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️'
+    };
+    const defaultTitleMap = {
+      success: 'Berhasil',
+      error: 'Terjadi Kesalahan',
+      warning: 'Perhatian',
+      info: 'Informasi Sistem'
+    };
+
+    const toastIcon = iconMap[normType] || 'ℹ️';
+    const toastTitle = title || defaultTitleMap[normType] || 'Notifikasi';
+
+    toast.innerHTML = `
+      <div class="wismon-toast-icon">${toastIcon}</div>
+      <div class="wismon-toast-body">
+        <div class="wismon-toast-title">${toastTitle}</div>
+        <div class="wismon-toast-msg">${message}</div>
+      </div>
+      <button class="wismon-toast-close" title="Tutup">&times;</button>
+      <div class="wismon-toast-progress" style="animation-duration: ${duration}ms;"></div>
+    `;
+
+    const closeBtn = toast.querySelector('.wismon-toast-close');
+    const dismiss = () => {
+      toast.classList.add('hide');
+      setTimeout(() => toast.remove(), 250);
+    };
+
+    closeBtn.addEventListener('click', dismiss);
+    const timer = setTimeout(dismiss, duration);
+
+    container.appendChild(toast);
+  }
+
+  showConfirm(title, message, onConfirm, confirmText = 'Lanjutkan', cancelText = 'Batal', styleType = 'warning') {
+    const existing = document.getElementById('wismon-confirm-dialog');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'wismon-confirm-dialog';
+    backdrop.className = 'wismon-confirm-backdrop';
+
+    const icon = styleType === 'critical' ? '🛑' : styleType === 'warning' ? '⚠️' : 'ℹ️';
+    const iconClass = styleType === 'critical' ? '' : styleType === 'warning' ? 'icon-warning' : 'icon-info';
+    const btnClass = styleType === 'critical' ? 'btn-danger' : 'btn-primary';
+
+    backdrop.innerHTML = `
+      <div class="wismon-confirm-modal">
+        <div class="wismon-confirm-header">
+          <div class="wismon-confirm-icon ${iconClass}">${icon}</div>
+          <div class="wismon-confirm-title">${title}</div>
+        </div>
+        <div class="wismon-confirm-desc">${message}</div>
+        <div class="wismon-confirm-actions">
+          <button class="btn btn-secondary btn-sm" id="confirm-cancel-btn">${cancelText}</button>
+          <button class="btn ${btnClass} btn-sm" id="confirm-ok-btn">${confirmText}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const cleanup = () => backdrop.remove();
+
+    backdrop.querySelector('#confirm-cancel-btn').addEventListener('click', cleanup);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) cleanup();
+    });
+
+    backdrop.querySelector('#confirm-ok-btn').addEventListener('click', async () => {
+      cleanup();
+      if (typeof onConfirm === 'function') {
+        await onConfirm();
+      }
+    });
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   window.app = new App();
   window.app.init();
+  window.showToast = (type, msg, title, dur) => window.app.showToast(type, msg, title, dur);
+  window.showConfirm = (title, msg, cb, ok, cancel, st) => window.app.showConfirm(title, msg, cb, ok, cancel, st);
 });

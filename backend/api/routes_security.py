@@ -43,7 +43,14 @@ async def mitigate_threat(req: MitigateRequest):
             raise HTTPException(status_code=400, detail="No target process PID associated with this threat.")
         term_res = aggregator.process_collector.terminate_process(pid)
         if not term_res["success"]:
-            raise HTTPException(status_code=500, detail=term_res["message"])
+            return {
+                "success": False,
+                "message": term_res["message"],
+                "can_fallback": True,
+                "suggested_actions": [
+                    {"label": "Tandai False Positive (Aman)", "action": "FALSE_POSITIVE"}
+                ]
+            }
         action_log = f"Terminated process PID {pid}"
         action_msg = f"Threat mitigated: Process {pid} terminated."
         await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
@@ -53,31 +60,44 @@ async def mitigate_threat(req: MitigateRequest):
         category = target_threat.get("category", "")
         pid = target_threat.get("pid")
 
-        # 1. High CPU Process Remediation: Pause / Cooldown for 3.5s then resume
+        # 1. High CPU Process Remediation: Pause / Cooldown with multi-tier fallback
         if (category == "High CPU Process" or req.action in ("COOLDOWN_PROCESS", "THROTTLE_PROCESS")) and pid:
             cool_res = await threat_center.throttle_and_cooldown_process(pid, duration=3.5)
-            if cool_res["success"]:
-                action_log = f"Proses PID {pid} ditangguhkan 3.5 detik untuk pendinginan CPU lalu dilanjutkan."
-                action_msg = cool_res["message"]
+            if cool_res.get("success"):
+                action_log = cool_res["message"]
+                await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
+                return {"success": True, "message": cool_res["message"]}
             else:
-                action_log = f"Upaya penangguhan proses PID {pid}: {cool_res['message']}"
-                action_msg = cool_res["message"]
+                # Remediation failed: DO NOT resolve! Return failure details and fallback tools
+                return {
+                    "success": False,
+                    "message": cool_res["message"],
+                    "can_fallback": cool_res.get("can_fallback", True),
+                    "suggested_actions": cool_res.get("suggested_actions", [
+                        {"label": "Paksa Hentikan (Kill)", "action": "TERMINATE_PROCESS"},
+                        {"label": "Tandai False Positive (Aman)", "action": "FALSE_POSITIVE"}
+                    ])
+                }
 
         # 2. Memory Exhaustion Remediation: Trim working set memory
         elif category == "System Anomaly" or "Memory" in category:
             trim_res = threat_center.trim_system_memory()
-            action_log = trim_res["message"]
-            action_msg = f"Mitigasi Memori Selesai: {trim_res['message']}"
+            if trim_res.get("success"):
+                action_log = trim_res["message"]
+                action_msg = f"Mitigasi Memori Selesai: {trim_res['message']}"
+                await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
+                return {"success": True, "message": action_msg}
+            else:
+                return {"success": False, "message": trim_res["message"]}
 
         else:
             action_log = "Status diverifikasi dan diselesaikan oleh administrator sistem."
             action_msg = "Anomali berhasil diselesaikan dan dicatat."
-
-        await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
-        return {"success": True, "message": action_msg}
+            await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
+            return {"success": True, "message": action_msg}
 
     elif req.action == "FALSE_POSITIVE":
         await threat_center.update_threat_status(req.threat_id, "FALSE_POSITIVE", action="Flagged as false positive by user.")
-        return {"success": True, "message": "Threat flagged as false positive."}
+        return {"success": True, "message": "Ancaman ditandai sebagai False Positive (Aman)."}
 
     raise HTTPException(status_code=400, detail="Unsupported mitigation action.")

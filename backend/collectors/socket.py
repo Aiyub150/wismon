@@ -20,6 +20,8 @@ class SocketCollector(BaseCollector):
         }
         self._dns_pending: set = set()
         self._cache_lock = threading.Lock()
+        self._pid_name_cache: Dict[int, str] = {}
+        self._cleanup_tick: int = 0
 
     def _async_resolve_dns(self, ip: str):
         """Asynchronously resolve an IP address in a background worker thread."""
@@ -35,6 +37,8 @@ class SocketCollector(BaseCollector):
                 self._dns_pending.discard(ip)
 
     def _get_hostname(self, ip: str) -> str:
+        if not ip or ip in ("—", "0.0.0.0", "127.0.0.1", "::1", "::"):
+            return self._dns_cache.get(ip, ip or "—")
         with self._cache_lock:
             if ip in self._dns_cache:
                 return self._dns_cache[ip]
@@ -43,22 +47,28 @@ class SocketCollector(BaseCollector):
                 threading.Thread(target=self._async_resolve_dns, args=(ip,), daemon=True).start()
         return ip  # Immediate non-blocking response
 
+    def _resolve_process_name(self, pid: Optional[int]) -> str:
+        """Lightweight on-demand PID name resolution with local caching."""
+        if not pid or pid == 0:
+            return "System"
+        if pid in self._pid_name_cache:
+            return self._pid_name_cache[pid]
+        try:
+            name = psutil.Process(pid).name()
+            self._pid_name_cache[pid] = name
+            return name
+        except Exception:
+            return f"PID {pid}"
+
     def collect(self) -> Dict[str, Any]:
         connections_list: List[Dict[str, Any]] = []
-
-        # Process name lookup cache
-        proc_names: Dict[int, str] = {}
-        for p in psutil.process_iter(['pid', 'name']):
-            try:
-                proc_names[p.info['pid']] = p.info['name']
-            except Exception:
-                pass
 
         try:
             conns = psutil.net_connections(kind='inet')
         except Exception:
             conns = []
 
+        active_pids = set()
         for c in conns:
             proto = "TCP" if c.type == socket.SOCK_STREAM else "UDP"
             laddr = f"{c.laddr.ip}:{c.laddr.port}" if c.laddr else "Unavailable"
@@ -68,7 +78,9 @@ class SocketCollector(BaseCollector):
             remote_host = self._get_hostname(remote_ip) if remote_ip else "—"
 
             pid = c.pid or 0
-            pname = proc_names.get(pid, f"PID {pid}" if pid else "System")
+            if pid > 0:
+                active_pids.add(pid)
+            pname = self._resolve_process_name(pid)
 
             connections_list.append({
                 "protocol": proto,
@@ -81,6 +93,12 @@ class SocketCollector(BaseCollector):
                 "pid": pid,
                 "process_name": pname
             })
+
+        # Periodic cleanup of terminated PIDs in cache every 20 ticks (~1-2 min)
+        self._cleanup_tick += 1
+        if self._cleanup_tick >= 20:
+            self._cleanup_tick = 0
+            self._pid_name_cache = {p: n for p, n in self._pid_name_cache.items() if p in active_pids}
 
         # Summary statistics
         established = sum(1 for c in connections_list if c["state"] == "ESTABLISHED")

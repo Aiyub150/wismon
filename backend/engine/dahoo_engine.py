@@ -7,6 +7,7 @@ Implements the Hybrid Assistant Architecture with Detect-Ask-Act:
 
 import time
 import re
+import asyncio
 from typing import Dict, Any, Tuple, Optional
 from backend.config import GEMINI_API_KEY, GEMINI_MODEL, INPUT_PRICE_PER_1M, OUTPUT_PRICE_PER_1M
 from backend.db import db_manager
@@ -108,9 +109,41 @@ class DahooEngine:
         if not active_top_proc and top_procs:
             active_top_proc = top_procs[0]
 
-        # 0. User Confirmation / Act on Pending Action
+        # 0. User Confirmation / Immediate Action Execution
         confirm_words = ["ya", "yes", "oke", "ok", "lakukan", "setuju", "eksekusi", "jalankan", "perbaiki", "bantu", "boleh", "sip", "yup", "siap", "tangguhkan", "bersihkan", "gas"]
         cancel_words = ["tidak", "no", "batal", "jangan", "skip", "abaikan", "ga usah", "gak", "nggak", "nanti"]
+
+        # Direct action trigger: Cooldown / Tangguhkan
+        if any(w in q for w in ["tangguhkan", "cooldown", "dinginkan cpu", "pause proses"]):
+            if self._pending_action:
+                act = self._pending_action
+                res = await self.execute_action(act["type"], act.get("params", {}))
+                if res.get("success"):
+                    return f"✅ **Tindakan Berhasil Dijalankan!**\n\n{res.get('message')}\n\nSuhu dan beban prosesor terpantau menurun stabil.", None
+                else:
+                    return f"⚠️ **Upaya tindakan mengalami kendala:** {res.get('message')}", None
+            elif active_top_proc:
+                res = await self.execute_action("COOLDOWN_PROCESS", {"pid": active_top_proc.get("pid"), "name": active_top_proc.get("name")})
+                if res.get("success"):
+                    return f"✅ **Tindakan Berhasil Dijalankan Langsung!**\n\n{res.get('message')}\n\nSuhu dan beban prosesor terpantau menurun stabil.", None
+                else:
+                    return f"⚠️ **Upaya tindakan mengalami kendala:** {res.get('message')}", None
+
+        # Direct action trigger: Trim RAM
+        if any(w in q for w in ["bersihkan ram", "trim ram", "kosongkan ram", "bebaskan ram", "optimize ram"]):
+            res = await self.execute_action("TRIM_MEMORY", {})
+            if res.get("success"):
+                return f"✅ **Cache Memori Berhasil Dibebaskan!**\n\n{res.get('message')}\n\nKapasitas RAM sekarang lebih lega.", None
+            else:
+                return f"⚠️ **Gagal membersihkan RAM:** {res.get('message')}", None
+
+        # Direct action trigger: Clean Temp
+        if any(w in q for w in ["bersihkan temp", "hapus temp", "bersihkan sampah"]):
+            res = await self.execute_action("CLEAN_TEMP", {})
+            if res.get("success"):
+                return f"✅ **Pembersihan Berhasil!**\n\n{res.get('message')}\n\nRuang disk telah bertambah.", None
+            else:
+                return f"⚠️ **Gagal membersihkan temp:** {res.get('message')}", None
 
         if any(q == w or q.startswith(w + " ") or q.endswith(" " + w) for w in confirm_words):
             if self._pending_action:
@@ -350,29 +383,71 @@ class DahooEngine:
                 "estimated_cost": 0.0
             }
 
-        # Cloud AI reasoning via Gemini (with sanitized telemetry context)
-        cpu_name = telemetry.get('cpu', {}).get('processor_name', 'Windows Processor')
+        # Cloud AI reasoning via Gemini (Token-optimized and non-blocking)
+        top_procs = telemetry.get("process", {}).get("top_cpu", [])
+        active_top_proc = next((p for p in top_procs if p.get("pid", 0) > 0 and "idle" not in p.get("name", "").lower()), None)
+        top_str = f"TopProcess={active_top_proc.get('name')} (PID={active_top_proc.get('pid')}, CPU={active_top_proc.get('cpu_percent')}%)" if active_top_proc else "ProcessesNormal"
+
         system_context = (
-            f"You are Dahoo, a friendly, ultra-competent mascot and system observability assistant in WISMON (Windows System Monitoring). "
-            f"Current System State: Health={telemetry.get('health', {}).get('score', 100)}/100 ({telemetry.get('health', {}).get('status', 'Healthy')}), "
-            f"CPU={telemetry.get('cpu', {}).get('total_percent', 0)}% on {cpu_name}, "
-            f"RAM={telemetry.get('memory', {}).get('percent', 0)}%, "
-            f"Active Threats={len(telemetry.get('threats', []))}. "
-            f"Always provide insightful, concise, technical yet friendly recommendations. Keep it grounded in real telemetry. "
-            f"Do not ask for or output sensitive credentials or full Windows user account directories."
+            f"You are Dahoo, the loyal smart wolf mascot assistant in WISMON (Windows System Monitoring). "
+            f"System State: Health={telemetry.get('health', {}).get('score', 100)}/100, "
+            f"CPU={telemetry.get('cpu', {}).get('total_percent', 0)}%, RAM={telemetry.get('memory', {}).get('percent', 0)}%, "
+            f"ActiveThreats={len(telemetry.get('threats', []))}, {top_str}. "
+            f"Rules: Reply concisely in Indonesian (1-3 sentences), warm tone (Aww/🐺). "
+            f"Minimize tokens strictly. If user asks to fix lag or cool down CPU or system needs action, end message with exact tag: "
+            f"[ACTION:COOLDOWN:pid:name] or [ACTION:TRIM_RAM] or [ACTION:CLEAN_TEMP]."
         )
 
         try:
             from google.genai import types
-            response = self._genai_client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=message,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_context,
-                    temperature=0.7,
+
+            def _call_gemini():
+                return self._genai_client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=message,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_context,
+                        temperature=0.5,
+                        max_output_tokens=250
+                    )
                 )
-            )
-            reply = response.text or "Aww, maaf aku sedang kesulitan berpikir saat ini."
+
+            # Non-blocking async execution: prevents freezing FastAPI SSE & HTTP loops
+            response = await asyncio.to_thread(_call_gemini)
+            raw_reply = response.text or "Aww, maaf aku sedang kesulitan berpikir saat ini."
+
+            # Action tag parsing from Gemini response
+            action_data = None
+            reply = raw_reply
+
+            match_cooldown = re.search(r'\[ACTION:COOLDOWN:(\d+):?([^\]]*)\]', reply, re.IGNORECASE)
+            if match_cooldown:
+                act_pid = int(match_cooldown.group(1))
+                act_name = match_cooldown.group(2).strip() or f"PID {act_pid}"
+                action_data = {
+                    "type": "COOLDOWN_PROCESS",
+                    "params": {"pid": act_pid, "name": act_name},
+                    "label": f"Tangguhkan {act_name} (3.5s)"
+                }
+                self._pending_action = action_data
+                reply = re.sub(r'\[ACTION:[^\]]+\]', '', reply).strip()
+            elif "[ACTION:TRIM_RAM]" in reply or "[ACTION:TRIM_MEMORY]" in reply:
+                action_data = {
+                    "type": "TRIM_MEMORY",
+                    "params": {},
+                    "label": "Bebaskan Cache RAM"
+                }
+                self._pending_action = action_data
+                reply = re.sub(r'\[ACTION:[^\]]+\]', '', reply).strip()
+            elif "[ACTION:CLEAN_TEMP]" in reply:
+                action_data = {
+                    "type": "CLEAN_TEMP",
+                    "params": {},
+                    "label": "Bersihkan File Temp"
+                }
+                self._pending_action = action_data
+                reply = re.sub(r'\[ACTION:[^\]]+\]', '', reply).strip()
+
             in_tokens = 0
             out_tokens = 0
             if response.usage_metadata:
@@ -388,7 +463,7 @@ class DahooEngine:
                 "reply": reply,
                 "engine": "cloud",
                 "model": GEMINI_MODEL,
-                "action": None,
+                "action": action_data,
                 "input_tokens": in_tokens,
                 "output_tokens": out_tokens,
                 "estimated_cost": round(cost, 6)

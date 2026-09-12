@@ -206,7 +206,8 @@ class HardwareCollector(BaseCollector):
             "cpu_temp_c": None,
             "status": "Thermal sensors unavailable on this hardware/BIOS"
         }
-        self._thermal_check_interval = 30.0
+        # Long backoff (5 mins) if hardware/BIOS does not expose thermal sensors to prevent continuous PowerShell overhead
+        self._thermal_check_interval = 300.0
         return self._thermal_cache
 
     def collect(self) -> Dict[str, Any]:

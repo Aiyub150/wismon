@@ -10,49 +10,59 @@ Dibangun dengan fondasi antarmuka profesional berbasis desain **TailAdmin**, WIS
 
 ## ⚡ Fitur Utama
 
-### 1. TailAdmin Professional UI Foundation
-- Antarmuka monitoring elegan terinspirasi dari TailAdmin Dashboard Template.
+### 1. TailAdmin Professional UI & Modern Toast Notification System
+- Antarmuka monitoring modern dan elegan terinspirasi dari TailAdmin Dashboard Template.
 - Dukungan tema ganda instan: **Dark Mode** (`#1A222C` / `#24303F`) dan **Light Mode** (`#F1F5F9` / `#FFFFFF`).
+- **Modern Floating Toast System**: Menggantikan dialog bawaan browser yang kaku (`alert()` dan `confirm()`) dengan notifikasi pop-up modern, ringan, beranimasi halus, dan auto-dismiss progress bar untuk aksi Recycle Bin, proses, dan mitigasi keamanan.
 - Indikator status telemetri real-time: `● LIVE` (pulsing dot hijau), `● RECONNECTING`, dan `● OFFLINE`.
 - Responsive layout yang dense dan fokus pada penyajian data metrik teknis tanpa ornamen visual berlebih.
 
-### 2. Native Windows PDH & ACPI Thermal Architecture
+### 2. Low-Resource & Energy Efficient Telemetry Architecture (v2.1)
+- **Zero-Waste Process Caching**: Menghilangkan duplikasi pemindaian proses sistem pada `SocketCollector`, menggunakan cache resolusi PID on-demand yang memangkas beban CPU secara drastis.
+- **Throttled Subprocess Execution**: Membatasi eksekusi `nvidia-smi` dan menonaktifkan pemanggilan berulang PowerShell pada hardware yang tidak mengekspos sensor thermal ACPI, mencegah lonjakan konsumsi baterai dan CPU.
+- **Adaptive Services Polling**: Mengoptimalkan pembacaan Service Control Manager dengan caching metadata statis dan interval adaptif (25s) sehingga tidak membebani sistem.
+
+### 3. Native Windows PDH & ACPI Thermal Architecture
 - **Zero-Privilege Thermal Monitoring**: Menggunakan antarmuka native Windows Performance Data Helper (`pdh.dll`) via counter `\Thermal Zone Information(*)\High Precision Temperature`.
 - Pembacaan suhu CPU & SoC akurat (derajat Celsius) secara instan tanpa memerlukan hak akses Administrator atau driver kernel pihak ketiga.
 - Indikator visual meter / progress bar interaktif pada kartu KPI suhu di halaman Dashboard.
 
-### 3. Universal Multi-GPU & Integrated Graphics Telemetry
+### 4. Universal Multi-GPU & Integrated Graphics Telemetry
 - Mendukung seluruh arsitektur grafis: **Intel Iris Xe**, **Intel UHD**, **AMD Radeon**, dan **NVIDIA GeForce / RTX**.
 - Integrasi Windows DirectX / WDDM PerfCounters untuk engine utilization (3D) dan alokasi memory VRAM (Dedicated & Shared System Memory).
 - Deteksi diode suhu dedicated via `nvidia-smi` untuk kartu diskrit, serta korelasi thermal package SoC untuk GPU terintegrasi.
 - Tampilan GPU & Hardware dinamis tanpa delay atau status stuck pada "Detecting...".
 
-### 4. Decoupled Real-Time Streaming Architecture
+### 5. Decoupled Real-Time Streaming Architecture
 - Streaming telemetri Server-Sent Events (SSE) berkadensi ~1.0 detik langsung dari state in-memory ring-buffer (300 sampel data).
 - Scheduler independen: telemetri cepat (CPU, RAM, GPU, Storage I/O, Network) dieksekusi instan (<10ms), sedangkan kolektor berat (`ProcessCollector`, `ServicesCollector`, `HardwareCollector`) diproses secara asinkron di worker thread terpisah (`asyncio.to_thread`).
 - Penulisan database SQLite (WAL) dibatch per 5–10 frame untuk menjaga efisiensi SSD dan meminimalkan disk I/O.
 
-### 5. Threat Center & Security Events dengan Aksi Nyata (Active Remediation)
+### 6. Threat Center & Multi-Tier Active Remediation
 - Deteksi otomatis anomali beban prosesor ekstrem, lonjakan koneksi mencurigakan, dan kepenuhan memori fisik.
-- **Tindakan Nyata Saat Resolve**:
-  - **High CPU Process**: Menangguhkan (*pause / suspend*) proses target selama 3.5 detik untuk mendinginkan prosesor dan menstabilkan beban sistem, lalu melanjutkannya (*resume*) secara normal.
-  - **RAM Exhaustion**: Membersihkan dan memangkas (*trim*) working set memory proses aktif via Windows API `EmptyWorkingSet`.
-  - **Malicious Process**: Opsi terminasi proses aman dengan konfirmasi eksplisit.
+- **Multi-Tier Remediation**:
+  - **Tier 1 (Suspend / Cooldown)**: Menangguhkan (*pause / suspend*) proses target selama 3.5 detik untuk mendinginkan prosesor dan menstabilkan beban sistem, lalu melanjutkannya (*resume*) secara normal.
+  - **Tier 2 (Fallback Priority Throttle)**: Jika hak penangguhan dibatasi oleh Windows (Access Denied), sistem secara otomatis beralih menurunkan prioritas proses ke `IDLE` / `BELOW_NORMAL` untuk melegakan beban CPU tanpa error.
+  - **Tier 3 (Alternative Tools & Diagnosis)**: Jika tindakan gagal, status TIDAK ditandai resolved palsu; sistem menyajikan diagnosa penyebab yang jelas dan menyajikan opsi alternatif (Terminasi Proses atau False Positive).
+  - **RAM Exhaustion**: Membersihkan working set memory proses aktif via Windows API `EmptyWorkingSet`.
 - Setiap aksi tercatat dalam audit log dan riwayat database.
 
-### 6. Dahoo Assistant 2.0 (Detect — Ask — Act)
+### 7. Dahoo Assistant 2.1 (Detect — Ask — Act & Token-Efficient AI)
 - Maskot pendamping cerdas dengan ekspresi wajah reaktif (`happy`, `normal`, `worried`, `alert`, `thinking`).
-- **Pola Detect-Ask-Act**:
-  - **Detect**: Memeriksa beban CPU, RAM, suhu, file sementara, dan ancaman secara berkelanjutan.
-  - **Ask**: Memberikan saran perbaikan kontekstual dilengkapi tombol aksi interaktif (misalnya `[⚡ Tangguhkan Proses (3.5s)]` atau `[⚡ Bebaskan Cache RAM]`).
-  - **Act**: Mengeksekusi perbaikan nyata saat tombol diklik atau saat pengguna menjawab setuju (*"ya"*, *"lakukan"*, *"ok"*).
-- **Pengenalan Bahasa Alami Offline**: Mampu memahami berbagai pertanyaan berbahasa Indonesia dan Inggris (seperti *"kenapa laptop lemot?"*, *"berapa suhu komputer?"*, *"bersihkan memori"*) secara fleksibel tanpa ketergantungan teks kaku atau peringatan API key yang tidak perlu.
-- **Proactive System Alerts**: Peringatan lonjakan CPU (>85%) atau ancaman keamanan otomatis disalurkan langsung sebagai bubble chat asisten di feed percakapan Dahoo.
-- **Mode Cloud AI Opsional**: Mendukung penalaran mendalam berbasis Google Gemini jika `GEMINI_API_KEY` dikonfigurasi di `.env`.
+- **Pola Detect-Ask-Act Cepat & Responsif**:
+  - **Detect**: Memeriksa beban CPU, RAM, suhu, file sementara, dan ancaman secara real-time.
+  - **Ask**: Memberikan saran perbaikan kontekstual dilengkapi tombol aksi interaktif instan.
+  - **Act**: Mengeksekusi perbaikan nyata tanpa delay dengan konfirmasi toast feedback langsung.
+- **Token-Efficient Cloud AI (Gemini)**:
+  - Eksekusi asinkron non-blocking (`asyncio.to_thread`) sehingga tidak membekukan streaming data atau API server.
+  - Ringkasan konteks telemetri padat untuk menghemat kuota token Gemini secara signifikan.
+  - Gemini kini dapat merekomendasikan dan memicu tombol aksi perbaikan nyata (`[ACTION:...]`) sama seperti asisten lokal.
+- **Pengenalan Bahasa Alami Fleksibel**: Memahami langsung instruksi perbaikan (seperti *"tangguhkan proses"*, *"dinginkan cpu"*, *"bersihkan memori"*) tanpa template kaku.
 
-### 7. Storage Analyzer & Memory Deep Architecture
+### 8. Storage Analyzer & Memory Deep Architecture
+- **Safe Recycle Bin Deletion**: Menghapus file besar (>100 MB) yang tidak terpakai langsung ke Windows Recycle Bin dengan konfirmasi modal pop-up yang aman.
 - **Deep Memory**: Mengurai RAM fisik, Paged Pool, Non-Paged Pool, Commit Charge, Commit Limit, dan System Cache via `GetPerformanceInfo`.
-- **Storage Analyzer**: Menemukan file berukuran besar (> 100 MB), file lama (> 180 hari), dan pembersihan aman file sementara di folder Temp.
+- **Storage Analyzer**: Menemukan file berukuran besar, file lama (> 180 hari), dan pembersihan aman file sementara di folder Temp.
 
 ### 8. Network Throughput & Socket Explorer
 - Kecepatan unduh dan unggah real-time per adapter aktif (Wi-Fi, Ethernet).

@@ -111,21 +111,25 @@ class ThreatCenter:
 
     async def throttle_and_cooldown_process(self, pid: int, duration: float = 3.5) -> Dict[str, Any]:
         """
-        Active remediation for High CPU Process:
-        Temporarily pauses (suspends) the runaway process for 3.5s to immediately relieve CPU stress,
-        cool down temperatures, and resumes execution seamlessly.
+        Active remediation for High CPU Process with Multi-Tier Fallback:
+        Tier 1: Temporarily pause (suspend) process for cooldown duration.
+        Tier 2 (Fallback): If suspend is denied, lower CPU priority to IDLE/BELOW_NORMAL.
+        Tier 3: Detailed diagnostic explanation with alternative tool options if all fail.
         """
         import psutil
         import asyncio
         if not psutil.pid_exists(pid):
-            return {"success": False, "message": f"Process PID {pid} no longer active."}
+            return {"success": False, "message": f"Proses PID {pid} sudah tidak aktif di sistem."}
         try:
             p = psutil.Process(pid)
             pname = p.name()
-            # Suspend the process
+        except Exception as e:
+            return {"success": False, "message": f"Tidak dapat mengakses proses PID {pid}: {str(e)}"}
+
+        # Tier 1: Try suspend/resume
+        try:
             p.suspend()
 
-            # Background task to resume after cooldown duration
             async def _resume_worker(proc, delay, name, target_pid):
                 await asyncio.sleep(delay)
                 try:
@@ -137,10 +141,46 @@ class ThreatCenter:
             asyncio.create_task(_resume_worker(p, duration, pname, pid))
             return {
                 "success": True,
-                "message": f"Proses {pname} (PID: {pid}) ditangguhkan sejenak ({duration} detik) untuk mendinginkan CPU lalu kembali normal."
+                "tool_used": "process_suspend",
+                "message": f"Proses {pname} (PID: {pid}) berhasil ditangguhkan sejenak ({duration} detik) untuk mendinginkan CPU lalu normal kembali."
             }
+        except (psutil.AccessDenied, PermissionError):
+            # Tier 2 Fallback: Lower CPU Priority Class
+            try:
+                # Try setting priority to IDLE
+                if hasattr(psutil, 'IDLE_PRIORITY_CLASS'):
+                    p.nice(psutil.IDLE_PRIORITY_CLASS)
+                elif hasattr(psutil, 'BELOW_NORMAL_PRIORITY_CLASS'):
+                    p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+
+                return {
+                    "success": True,
+                    "tool_used": "priority_throttle",
+                    "message": f"Izin penangguhan terbatas. Berhasil beralih ke Opsi Tool 2: Prioritas CPU untuk {pname} (PID: {pid}) diturunkan ke IDLE untuk meredakan beban prosesor."
+                }
+            except Exception as pe:
+                return {
+                    "success": False,
+                    "error_code": "ACCESS_DENIED",
+                    "tool_used": "failed_all_tools",
+                    "can_fallback": True,
+                    "message": f"Gagal menindak {pname} (PID: {pid}): Izin ditolak (Access Denied). Proses ini merupakan layanan sistem terproteksi atau membutuhkan hak Administrator.",
+                    "suggested_actions": [
+                        {"label": "Paksa Hentikan (Kill)", "action": "TERMINATE_PROCESS"},
+                        {"label": "Tandai False Positive (Aman)", "action": "FALSE_POSITIVE"}
+                    ]
+                }
         except Exception as e:
-            return {"success": False, "message": f"Gagal menangguhkan proses PID {pid}: {str(e)}"}
+            return {
+                "success": False,
+                "error_code": "GENERAL_ERROR",
+                "can_fallback": True,
+                "message": f"Gagal menangguhkan proses {pname} (PID: {pid}): {str(e)}",
+                "suggested_actions": [
+                    {"label": "Paksa Hentikan (Kill)", "action": "TERMINATE_PROCESS"},
+                    {"label": "Tandai False Positive (Aman)", "action": "FALSE_POSITIVE"}
+                ]
+            }
 
     def trim_system_memory(self) -> Dict[str, Any]:
         """

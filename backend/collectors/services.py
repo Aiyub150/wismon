@@ -1,54 +1,75 @@
-"""
-Windows Services Collector for Windows System Monitoring.
-Enumerates installed Windows services and analyzes services mapped under svchost.exe instances.
-"""
-
+import time
 import psutil
 from typing import Dict, Any, List
 from backend.collectors.base import BaseCollector
 
 class ServicesCollector(BaseCollector):
-    def __init__(self, interval: float = 5.0):
+    def __init__(self, interval: float = 15.0):
         super().__init__(name="services", interval=interval)
+        self._meta_cache: Dict[str, Dict[str, Any]] = {}
+        self._last_full_refresh: float = 0.0
 
     def collect(self) -> Dict[str, Any]:
+        now = time.time()
+        is_full_refresh = (now - self._last_full_refresh) > 60.0 or not self._meta_cache
+
         services_list: List[Dict[str, Any]] = []
         svchost_groups: Dict[int, List[Dict[str, Any]]] = {}
 
         try:
             for s in psutil.win_service_iter():
                 try:
-                    s_info = s.as_dict()
-                    name = s_info.get("name", "")
-                    display_name = s_info.get("display_name", "")
-                    status = s_info.get("status", "unknown")
-                    start_type = s_info.get("start_type", "unknown")
-                    pid = s_info.get("pid")
-                    binpath = s_info.get("binpath", "")
-                    username = s_info.get("username", "")
+                    s_name = s.name()
+                    meta = self._meta_cache.get(s_name)
+
+                    if is_full_refresh or not meta:
+                        s_info = s.as_dict()
+                        meta = {
+                            "name": s_name,
+                            "display_name": s_info.get("display_name", ""),
+                            "start_type": s_info.get("start_type", "unknown"),
+                            "binpath": s_info.get("binpath", ""),
+                            "username": s_info.get("username", ""),
+                            "is_svchost": "svchost.exe" in (s_info.get("binpath", "")).lower()
+                        }
+                        self._meta_cache[s_name] = meta
+
+                    # Dynamic status and pid
+                    try:
+                        status = s.status()
+                    except Exception:
+                        status = "unknown"
+
+                    try:
+                        pid = s.pid()
+                    except Exception:
+                        pid = None
 
                     item = {
-                        "name": name,
-                        "display_name": display_name,
+                        "name": meta["name"],
+                        "display_name": meta["display_name"],
                         "status": status,
-                        "start_type": start_type,
+                        "start_type": meta["start_type"],
                         "pid": pid,
-                        "binpath": binpath,
-                        "username": username
+                        "binpath": meta["binpath"],
+                        "username": meta["username"]
                     }
                     services_list.append(item)
 
-                    # Check svchost association
-                    if pid and pid > 0 and ("svchost.exe" in binpath.lower() or "svchost" in (s_info.get("description", "").lower())):
+                    # Map svchost instances
+                    if pid and pid > 0 and meta.get("is_svchost"):
                         if pid not in svchost_groups:
                             svchost_groups[pid] = []
                         svchost_groups[pid].append({
-                            "name": name,
-                            "display_name": display_name,
+                            "name": meta["name"],
+                            "display_name": meta["display_name"],
                             "status": status
                         })
                 except Exception:
                     continue
+
+            if is_full_refresh:
+                self._last_full_refresh = now
         except Exception:
             pass
 

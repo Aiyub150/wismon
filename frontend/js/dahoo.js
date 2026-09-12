@@ -239,8 +239,11 @@ class DahooController {
       actBtn.innerHTML = `⚡ <strong>${escapeHtml(action.label || 'Jalankan Aksi')}</strong>`;
       actBtn.onclick = () => {
         actBtn.disabled = true;
-        actBtn.textContent = 'Menjalankan...';
-        this.executeDahooAction(action.type, action.params);
+        actBtn.textContent = '⚡ Menjalankan...';
+        if (window.showToast) {
+          window.showToast('info', 'Mengeksekusi tindakan perbaikan sistem...', 'Dahoo Action Engine', 2500);
+        }
+        this.executeDahooAction(action.type, action.params, actionBox);
       };
       actionBox.appendChild(actBtn);
 
@@ -272,7 +275,7 @@ class DahooController {
     this.chatBody.scrollTop = this.chatBody.scrollHeight;
   }
 
-  async executeDahooAction(actionType, params = {}) {
+  async executeDahooAction(actionType, params = {}, actionBox = null) {
     this.showTypingIndicator();
     try {
       const res = await fetch('/api/dahoo/action', {
@@ -281,16 +284,28 @@ class DahooController {
         body: JSON.stringify({ action_type: actionType, params: params })
       });
       this.removeTypingIndicator();
+      if (actionBox) actionBox.remove();
+
       if (res.ok) {
         const data = await res.json();
         const icon = data.success ? '✅' : '⚠️';
         this.appendMessage('assistant', `${icon} **Laporan Tindakan Perbaikan:**\n\n${data.message || 'Tindakan berhasil dieksekusi.'}`, 'Dahoo Action Engine');
+        if (window.showToast) {
+          window.showToast(data.success ? 'success' : 'warning', data.message || 'Tindakan selesai.', 'Dahoo Assistant');
+        }
       } else {
         this.appendMessage('assistant', '⚠️ Gagal mengeksekusi tindakan perbaikan.', 'Dahoo Action Engine');
+        if (window.showToast) {
+          window.showToast('danger', 'Gagal mengeksekusi tindakan.', 'Dahoo Assistant');
+        }
       }
     } catch (e) {
       this.removeTypingIndicator();
+      if (actionBox) actionBox.remove();
       this.appendMessage('assistant', `⚠️ Gagal menghubungi server: ${e.message}`);
+      if (window.showToast) {
+        window.showToast('danger', 'Error: ' + e.message, 'Koneksi Terputus');
+      }
     }
   }
 

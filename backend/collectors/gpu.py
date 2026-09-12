@@ -6,6 +6,7 @@ complemented by nvidia-smi for NVIDIA deep telemetry and Win32_VideoController.
 Strictly outputs 'Not available on this system' if a metric cannot be queried.
 """
 
+import time
 import subprocess
 import shutil
 import json
@@ -32,6 +33,8 @@ class GPUCollector(BaseCollector):
         self._pdh_util_counter = None
         self._pdh_ded_mem_counter = None
         self._pdh_shared_mem_counter = None
+        self._last_nvidia_time = 0.0
+        self._cached_nvidia = []
         self._init_pdh()
 
     def _init_pdh(self):
@@ -205,6 +208,12 @@ class GPUCollector(BaseCollector):
     def _query_nvidia(self) -> List[Dict[str, Any]]:
         if not self.nvidia_smi_path:
             return []
+
+        now = time.time()
+        if (now - self._last_nvidia_time) < 4.0 and self._cached_nvidia:
+            return self._cached_nvidia
+
+        self._last_nvidia_time = now
         try:
             cmd = [
                 self.nvidia_smi_path,
@@ -227,10 +236,11 @@ class GPUCollector(BaseCollector):
                             "clock_mhz": float(parts[5]) if len(parts) > 5 and parts[5] != "[N/A]" else None,
                             "power_watts": float(parts[6]) if len(parts) > 6 and parts[6] != "[N/A]" else None,
                         })
+                self._cached_nvidia = results
                 return results
         except Exception:
             pass
-        return []
+        return self._cached_nvidia or []
 
     def collect(self) -> Dict[str, Any]:
         # 1. Query Nvidia if present

@@ -108,6 +108,49 @@ class SecurityPage {
       }
     } catch (err) {}
   }
+  showFallbackOptions(threatId, failureData) {
+    const existing = document.getElementById('wismon-fallback-modal');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'wismon-fallback-modal';
+    backdrop.className = 'wismon-confirm-backdrop';
+
+    const actions = failureData.suggested_actions || [
+      { label: 'Paksa Hentikan (Kill)', action: 'TERMINATE_PROCESS' },
+      { label: 'Tandai False Positive (Aman)', action: 'FALSE_POSITIVE' }
+    ];
+
+    const actionButtons = actions.map(a => `
+      <button class="btn btn-primary btn-sm" onclick="app.mitigateThreat('${threatId}', '${a.action}'); document.getElementById('wismon-fallback-modal')?.remove();">
+        ${escapeHtml(a.label)}
+      </button>
+    `).join('');
+
+    backdrop.innerHTML = `
+      <div class="wismon-confirm-modal">
+        <div class="wismon-confirm-header">
+          <div class="wismon-confirm-icon icon-warning">⚠️</div>
+          <div class="wismon-confirm-title">Opsi Alternatif Mitigasi</div>
+        </div>
+        <div class="wismon-confirm-desc">
+          <strong>Penyebab Kendala:</strong>
+          <p style="margin-top: 0.35rem; color: var(--status-critical); font-size: 0.8rem;">
+            ${escapeHtml(failureData.message || 'Tindakan awal tidak dapat dieksekusi.')}
+          </p>
+          <p style="margin-top: 0.5rem; font-size: 0.775rem; color: var(--text-secondary);">
+            Silakan pilih opsi penanganan alternatif di bawah ini atau jalankan WISMON dengan hak Administrator:
+          </p>
+        </div>
+        <div class="wismon-confirm-actions" style="margin-top: 0.75rem;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('wismon-fallback-modal')?.remove();">Tutup</button>
+          ${actionButtons}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+  }
 }
 
 window.securityPage = new SecurityPage();

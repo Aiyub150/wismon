@@ -98,7 +98,11 @@ class StoragePage {
         this.renderScanResults(data);
       }
     } catch (e) {
-      alert('Error performing storage scan: ' + e.message);
+      if (window.showToast) {
+        window.showToast('danger', 'Error memindai penyimpanan: ' + e.message, 'Storage Analyzer');
+      } else {
+        console.error('Error performing storage scan:', e);
+      }
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -152,28 +156,49 @@ class StoragePage {
     }
   }
 
-  async deleteFile(encodedPath, filename) {
+  deleteFile(encodedPath, filename) {
     const targetPath = decodeURIComponent(encodedPath);
-    if (!confirm(`Pindahkan file '${filename}' ke Windows Recycle Bin?\n\nFile dapat dipulihkan kembali dari Recycle Bin jika diperlukan.`)) {
-      return;
-    }
+    const confirmMsg = `Pindahkan file '${filename}' ke Windows Recycle Bin?\n\nFile dapat dipulihkan kembali dari Recycle Bin jika sewaktu-waktu masih diperlukan.`;
 
-    try {
-      const res = await fetch('/api/analysis/storage/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filepath: targetPath })
-      });
+    const executeDelete = async () => {
+      try {
+        const res = await fetch('/api/analysis/storage/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filepath: targetPath })
+        });
 
-      const data = await res.json();
-      if (data.success) {
-        alert(`Berhasil: ${data.message}`);
-        this.runStorageScan();
-      } else {
-        alert(`Gagal menghapus: ${data.error || 'Terjadi kesalahan sistem'}`);
+        const data = await res.json();
+        if (data.success) {
+          if (window.showToast) {
+            window.showToast('success', data.message || 'File berhasil dipindahkan ke Recycle Bin.', 'Penyimpanan Lebih Lega');
+          }
+          this.runStorageScan();
+        } else {
+          if (window.showToast) {
+            window.showToast('danger', data.error || 'Gagal memindahkan file ke Recycle Bin.', 'Penghapusan Gagal');
+          }
+        }
+      } catch (e) {
+        if (window.showToast) {
+          window.showToast('danger', 'Gagal menghubungi server: ' + e.message, 'Koneksi Terputus');
+        }
       }
-    } catch (e) {
-      alert(`Gagal menghubungi server: ${e.message}`);
+    };
+
+    if (window.showConfirm) {
+      window.showConfirm(
+        'Pindahkan ke Recycle Bin',
+        confirmMsg,
+        executeDelete,
+        'Pindahkan',
+        'Batal',
+        'warning'
+      );
+    } else {
+      if (confirm(confirmMsg)) {
+        executeDelete();
+      }
     }
   }
 }
