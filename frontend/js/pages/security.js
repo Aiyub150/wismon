@@ -12,12 +12,58 @@ class SecurityPage {
       this.threats = e.detail?.threats || [];
       this.renderThreats();
     });
+    window.addEventListener('threat-resolved', () => {
+      this.fetchEventHistory();
+    });
     this.fetchEventHistory();
+  }
+
+  async mitigateAllThreats() {
+    const btn = document.getElementById('security-mitigate-all-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⚡ Menjalankan Mitigasi Massal...';
+    }
+    if (window.showToast) {
+      window.showToast('info', 'Mengeksekusi mitigasi untuk semua ancaman sistem...', 'Batch Mitigation', 3000);
+    }
+    try {
+      const res = await fetch('/api/security/mitigate-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (window.showToast) {
+          window.showToast('success', data.message || 'Semua anomali berhasil dimitigasi.', 'Mitigasi Massal Selesai');
+        }
+        this.fetchEventHistory();
+        window.dispatchEvent(new CustomEvent('threat-resolved', { detail: data }));
+      } else {
+        if (window.showToast) {
+          window.showToast('danger', data.message || 'Gagal memitigasi anomali.', 'Mitigasi Gagal');
+        }
+      }
+    } catch (e) {
+      if (window.showToast) {
+        window.showToast('danger', 'Error: ' + e.message, 'Koneksi Terputus');
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Tindak Semua (Mitigate All)';
+      }
+    }
   }
 
   renderThreats() {
     const container = document.getElementById('security-threats-container');
     const badge = document.getElementById('security-threat-badge');
+    const mitigateAllBtn = document.getElementById('security-mitigate-all-btn');
+    if (mitigateAllBtn) {
+      mitigateAllBtn.style.display = this.threats.length > 0 ? 'inline-flex' : 'none';
+    }
     if (badge) {
       badge.textContent = `${this.threats.length} Active`;
       badge.className = this.threats.length > 0 ? 'badge badge-critical font-mono' : 'badge badge-healthy font-mono';

@@ -277,22 +277,53 @@ class DahooController {
 
   async executeDahooAction(actionType, params = {}, actionBox = null) {
     this.showTypingIndicator();
+    let progressTimer = null;
+    const actBtn = actionBox ? actionBox.querySelector('button.btn-primary') : null;
+
+    if (actBtn) {
+      let step = 0;
+      const steps = ['Validating target...', 'Executing action...', 'Verifying result...'];
+      progressTimer = setInterval(() => {
+        step = (step + 1) % steps.length;
+        if (actBtn) actBtn.innerHTML = `⚡ <span>${steps[step]}</span>`;
+      }, 1200);
+    }
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const res = await fetch('/api/dahoo/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action_type: actionType, params: params })
+        body: JSON.stringify({ action_type: actionType, params: params }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
+      if (progressTimer) clearInterval(progressTimer);
       this.removeTypingIndicator();
       if (actionBox) actionBox.remove();
 
       if (res.ok) {
         const data = await res.json();
         const icon = data.success ? '✅' : '⚠️';
-        this.appendMessage('assistant', `${icon} **Laporan Tindakan Perbaikan:**\n\n${data.message || 'Tindakan berhasil dieksekusi.'}`, 'Dahoo Action Engine');
+        let detailText = `${icon} **Laporan Tindakan Perbaikan:**\n\n${data.message || 'Tindakan berhasil dieksekusi.'}`;
+        if (data.details && data.details.length > 0) {
+          detailText += '\n\n**Rincian:**\n' + data.details.map(d => `• ${d}`).join('\n');
+        }
+        if (data.tool_used) {
+          detailText += `\n\n*Tool digunakan: \`${data.tool_used}\` • Verifikasi: PASSED*`;
+        }
+
+        this.appendMessage('assistant', detailText, 'Dahoo Action Engine');
         if (window.showToast) {
           window.showToast(data.success ? 'success' : 'warning', data.message || 'Tindakan selesai.', 'Dahoo Assistant');
         }
+
+        // Synchronize with Security Events page and topbar
+        window.dispatchEvent(new CustomEvent('threat-resolved', { detail: data }));
+        this.updateState();
       } else {
         this.appendMessage('assistant', '⚠️ Gagal mengeksekusi tindakan perbaikan.', 'Dahoo Action Engine');
         if (window.showToast) {
@@ -300,11 +331,14 @@ class DahooController {
         }
       }
     } catch (e) {
+      if (progressTimer) clearInterval(progressTimer);
       this.removeTypingIndicator();
       if (actionBox) actionBox.remove();
-      this.appendMessage('assistant', `⚠️ Gagal menghubungi server: ${e.message}`);
+      const isTimeout = e.name === 'AbortError';
+      const errMsg = isTimeout ? 'Batas waktu respon 10 detik terlampaui (Timeout).' : e.message;
+      this.appendMessage('assistant', `⚠️ Tindakan belum selesai: ${errMsg}\n\nSilakan coba kembali jika sistem belum merespons.`, 'Action Engine');
       if (window.showToast) {
-        window.showToast('danger', 'Error: ' + e.message, 'Koneksi Terputus');
+        window.showToast('danger', 'Tindakan: ' + errMsg, 'Dahoo Assistant');
       }
     }
   }

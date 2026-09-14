@@ -16,6 +16,9 @@ class MitigateRequest(BaseModel):
     action: str  # TERMINATE_PROCESS, RESOLVE, FALSE_POSITIVE
     confirm: bool
 
+class MitigateAllRequest(BaseModel):
+    confirm: bool = True
+
 @router.get("/threats")
 async def get_active_threats():
     return threat_center.get_threats()
@@ -23,6 +26,13 @@ async def get_active_threats():
 @router.get("/events")
 async def get_threat_history(limit: int = 100):
     return await db_manager.get_all_threats(limit=limit)
+
+@router.post("/mitigate-all")
+async def batch_mitigate_threats(req: MitigateAllRequest):
+    """Batch mitigates all active threats in a single action."""
+    if not req.confirm:
+        raise HTTPException(status_code=400, detail="Konfirmasi diperlukan untuk mitigasi massal.")
+    return await threat_center.mitigate_all_threats()
 
 @router.post("/mitigate")
 async def mitigate_threat(req: MitigateRequest):

@@ -1,10 +1,14 @@
 /**
  * Network Page Controller.
+ * Features live throughput charts, network interface telemetry,
+ * and Socket Explorer with external connection priority and domain filtering.
  */
 
 class NetworkPage {
   constructor() {
     this.tputChart = null;
+    this.allSockets = [];
+    this.socketStats = { total: 0, established: 0 };
   }
 
   init() {
@@ -17,12 +21,24 @@ class NetworkPage {
     });
 
     window.addEventListener('telemetry-update', (e) => this.update(e.detail));
+
+    // Socket search and filter event listeners
+    const searchInput = document.getElementById('socket-search-input');
+    const filterSelect = document.getElementById('socket-filter-select');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => this.renderSockets());
+    }
+    if (filterSelect) {
+      filterSelect.addEventListener('change', () => this.renderSockets());
+    }
+
     this.fetchSockets();
     setInterval(() => {
       if (window.app && window.app.currentPage === 'network') {
         this.fetchSockets();
       }
-    }, 4000);
+    }, 3000);
   }
 
   update(snap) {
@@ -81,29 +97,108 @@ class NetworkPage {
       const res = await fetch('/api/activity/sockets');
       if (res.ok) {
         const data = await res.json();
-        const conns = data.connections || [];
-        const countBadge = document.getElementById('sockets-count-badge');
-        if (countBadge) {
-          countBadge.textContent = `${conns.length} Sockets (${data.established_count || 0} Established)`;
-        }
-
-        const tbody = document.getElementById('network-sockets-tbody');
-        if (tbody) {
-          tbody.innerHTML = conns.slice(0, 35).map(c => `
-            <tr>
-              <td><span class="badge ${c.protocol === 'TCP' ? 'badge-neutral' : 'badge-warning'} font-mono">${c.protocol}</span></td>
-              <td class="font-mono text-secondary">${escapeHtml(c.local_address)}</td>
-              <td class="font-mono text-cyan">${escapeHtml(c.remote_address)}</td>
-              <td><span class="font-mono text-primary">${escapeHtml(c.remote_host)}</span></td>
-              <td><span class="badge ${c.state === 'ESTABLISHED' ? 'badge-healthy' : 'badge-neutral'} font-mono">${c.state}</span></td>
-              <td class="font-mono">${c.pid}</td>
-              <td><strong>${escapeHtml(c.process_name)}</strong></td>
-            </tr>
-          `).join('');
-        }
+        this.allSockets = data.connections || [];
+        this.socketStats = {
+          total: this.allSockets.length,
+          established: data.established_count || 0
+        };
+        this.renderSockets();
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Failed to fetch sockets:', e);
+    }
+  }
+
+  renderSockets() {
+    const filterSelect = document.getElementById('socket-filter-select');
+    const searchInput = document.getElementById('socket-search-input');
+    const filterMode = filterSelect ? filterSelect.value : 'external';
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    let filtered = this.allSockets;
+
+    // Filter by mode
+    if (filterMode === 'external') {
+      filtered = filtered.filter(c => c.is_external === true);
+    } else if (filterMode === 'established') {
+      filtered = filtered.filter(c => c.state === 'ESTABLISHED');
+    } else if (filterMode === 'listening') {
+      filtered = filtered.filter(c => c.state === 'LISTEN' || c.state === 'LISTENING');
+    }
+
+    // Filter by search query
+    if (query) {
+      filtered = filtered.filter(c => {
+        const host = (c.remote_host || '').toLowerCase();
+        const rAddr = (c.remote_address || '').toLowerCase();
+        const lAddr = (c.local_address || '').toLowerCase();
+        const proc = (c.process_name || '').toLowerCase();
+        const pid = String(c.pid || '');
+        return host.includes(query) || rAddr.includes(query) || lAddr.includes(query) || proc.includes(query) || pid.includes(query);
+      });
+    }
+
+    const countBadge = document.getElementById('sockets-count-badge');
+    if (countBadge) {
+      countBadge.textContent = `${filtered.length} of ${this.socketStats.total} Sockets (${this.socketStats.established} Established)`;
+    }
+
+    const tbody = document.getElementById('network-sockets-tbody');
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center text-muted" style="padding: 2rem;">
+            ${query 
+              ? `Tidak ditemukan koneksi yang cocok dengan "${escapeHtml(query)}"` 
+              : (filterMode === 'external' 
+                  ? 'Tidak ada koneksi internet eksternal aktif saat ini. Coba pilih "Semua Koneksi".' 
+                  : 'Tidak ada data soket.')}
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtered.slice(0, 60).map(c => {
+      const isExt = c.is_external;
+      const isEst = c.state === 'ESTABLISHED';
+      const rowStyle = isExt ? 'background: rgba(60, 80, 224, 0.04);' : '';
+
+      return `
+        <tr style="${rowStyle}">
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span class="badge ${c.protocol === 'TCP' ? 'badge-neutral' : 'badge-warning'} font-mono" style="font-size: 0.7rem;">${c.protocol}</span>
+              ${isExt ? '<span title="External Internet Connection" style="font-size: 0.8rem;">🌐</span>' : ''}
+            </div>
+          </td>
+          <td class="font-mono text-secondary" style="font-size: 0.75rem;">${escapeHtml(c.local_address)}</td>
+          <td class="font-mono text-cyan" style="font-size: 0.75rem; font-weight: ${isExt ? '600' : 'normal'};">
+            ${escapeHtml(c.remote_address)}
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <span class="font-mono ${isExt ? 'text-primary font-semibold' : 'text-secondary'}" style="font-size: 0.8rem;">
+                ${escapeHtml(c.remote_host || '-')}
+              </span>
+            </div>
+          </td>
+          <td>
+            <span class="badge ${isEst ? 'badge-healthy' : 'badge-neutral'} font-mono" style="font-size: 0.7rem;">
+              ${c.state}
+            </span>
+          </td>
+          <td class="font-mono" style="font-size: 0.75rem;">${c.pid}</td>
+          <td>
+            <strong style="font-size: 0.82rem;">${escapeHtml(c.process_name)}</strong>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 }
 
 window.networkPage = new NetworkPage();
+

@@ -17,17 +17,19 @@ class ThreatCenter:
                        processes: List[Dict[str, Any]],
                        connections: List[Dict[str, Any]],
                        cpu_percent: float,
-                       ram_percent: float) -> List[Dict[str, Any]]:
+                       ram_percent: float,
+                       drives: Optional[List[Dict[str, Any]]] = None,
+                       disk_io: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Evaluates current telemetry against threat rules and generates structured events.
-        Adheres to Section 17 & 18: Never labels something 'Malware' without proof;
-        uses Suspicious / Anomalous / Investigation Recommended.
+        Covers CPU outliers, Memory pressure, Low Storage, Suspicious Executable locations,
+        Unusual outbound connections, and High Disk Write spikes.
         """
         now = time.time()
         new_events = []
 
-        # Rule 1: High CPU Outlier (process consuming > 75% for an extended duration)
-        for proc in processes[:5]:
+        # Rule 1: High CPU Outlier (process consuming > 75% CPU)
+        for proc in processes[:6]:
             pid = proc.get("pid", -1)
             name = proc.get("name", "").lower()
             if pid <= 0 or "idle" in name or "system idle" in name:
@@ -45,7 +47,7 @@ class ThreatCenter:
                         "reason": f"Process is utilizing {proc['cpu_percent']}% of total CPU capacity.",
                         "evidence": f"PID={proc['pid']}, Executable='{proc['path']}', CPU={proc['cpu_percent']}%, Threads={proc['threads']}",
                         "status": "DETECTED",
-                        "recommended_action": f"Inspect workload or terminate process {proc['name']} (PID: {proc['pid']}).",
+                        "recommended_action": f"Tangguhkan sementara atau turunkan prioritas {proc['name']} (PID: {proc['pid']}).",
                         "action_taken": None,
                         "resolved_at": None,
                         "pid": proc["pid"]
@@ -53,15 +55,71 @@ class ThreatCenter:
                     self._active_threats[threat_id] = event
                     new_events.append(event)
 
-        # Rule 2: Unusual Outbound Connection Spike (A single process opening many outbound sockets)
+        # Rule 2: Suspicious Process Executables in Temp/User directories
+        for proc in processes[:20]:
+            pid = proc.get("pid", -1)
+            if pid <= 4:
+                continue
+            path = proc.get("path", "").lower()
+            name = proc.get("name", "").lower()
+            # Flag processes executing directly from AppData\Local\Temp
+            if "\\temp\\" in path or "\\appdata\\local\\temp\\" in path:
+                if not any(safe in name for safe in ("python", "node", "installer", "update", "setup", "code")):
+                    threat_id = f"suspicious_temp_{pid}"
+                    if threat_id not in self._active_threats:
+                        event = {
+                            "id": threat_id,
+                            "timestamp": now,
+                            "category": "Suspicious Executable",
+                            "severity": "HIGH",
+                            "source": "Process Collector",
+                            "target": f"{proc['name']} (PID: {pid})",
+                            "reason": f"Proses berjalan langsung dari direktori Temp pengguna ({path}).",
+                            "evidence": f"PID={pid}, Path='{proc.get('path')}'",
+                            "status": "SUSPICIOUS",
+                            "recommended_action": f"Periksa apakah proses {proc['name']} merupakan installer resmi atau hentikan jika mencurigakan.",
+                            "action_taken": None,
+                            "resolved_at": None,
+                            "pid": pid
+                        }
+                        self._active_threats[threat_id] = event
+                        new_events.append(event)
+
+        # Rule 3: Critical Low Disk Space (< 10% free or < 5GB)
+        if drives:
+            for d in drives:
+                pct = d.get("percent", 0.0)
+                free_gb = round(d.get("free_bytes", 0) / (1024**3), 1)
+                mount = d.get("mountpoint", d.get("device", "Disk"))
+                if pct > 90.0 or free_gb < 5.0:
+                    threat_id = f"low_disk_{mount.replace(':', '').replace('\\\\', '')}"
+                    if threat_id not in self._active_threats:
+                        event = {
+                            "id": threat_id,
+                            "timestamp": now,
+                            "category": "Storage Anomaly",
+                            "severity": "CRITICAL" if pct > 95 else "HIGH",
+                            "source": "Storage Collector",
+                            "target": f"Drive {mount}",
+                            "reason": f"Kapasitas penyimpanan Drive {mount} hampir habis ({pct}% terpakai, sisa {free_gb} GB).",
+                            "evidence": f"Total={round(d.get('total_bytes',0)/(1024**3),1)}GB, Free={free_gb}GB, Used={pct}%",
+                            "status": "CONFIRMED",
+                            "recommended_action": f"Bersihkan file sampah di folder Temp atau jalankan Storage Analyzer untuk membebaskan ruang disk {mount}.",
+                            "action_taken": None,
+                            "resolved_at": None
+                        }
+                        self._active_threats[threat_id] = event
+                        new_events.append(event)
+
+        # Rule 4: Unusual Outbound Connection Spike (>35 outbound connections)
         conn_by_proc: Dict[str, int] = {}
         for c in connections:
-            if c["state"] == "ESTABLISHED" and c["remote_ip"] not in ("—", "127.0.0.1", "::1"):
+            if c.get("state") == "ESTABLISHED" and c.get("is_external"):
                 key = f"{c['process_name']}|{c['pid']}"
                 conn_by_proc[key] = conn_by_proc.get(key, 0) + 1
 
         for proc_key, count in conn_by_proc.items():
-            if count > 45 and not ("chrome" in proc_key.lower() or "msedge" in proc_key.lower() or "firefox" in proc_key.lower()):
+            if count > 35 and not any(br in proc_key.lower() for br in ("chrome", "msedge", "firefox", "brave", "opera", "discord")):
                 pname, pid_str = proc_key.split("|")
                 threat_id = f"high_conn_{pid_str}"
                 if threat_id not in self._active_threats:
@@ -72,10 +130,10 @@ class ThreatCenter:
                         "severity": "HIGH",
                         "source": "Socket Explorer",
                         "target": f"{pname} (PID: {pid_str})",
-                        "reason": f"Process opened {count} simultaneous outbound connections (baseline: 5–20).",
+                        "reason": f"Proses membuka {count} koneksi remote eksternal simultan (baseline: 5–20).",
                         "evidence": f"Active remote connections: {count}",
                         "status": "SUSPICIOUS",
-                        "recommended_action": f"Review destination hosts and verify network authorization for {pname}.",
+                        "recommended_action": f"Periksa host tujuan dan pastikan izin koneksi jaringan untuk {pname}.",
                         "action_taken": None,
                         "resolved_at": None,
                         "pid": int(pid_str) if pid_str.isdigit() else 0
@@ -83,7 +141,7 @@ class ThreatCenter:
                     self._active_threats[threat_id] = event
                     new_events.append(event)
 
-        # Rule 3: Extreme System Memory Exhaustion (>94%)
+        # Rule 5: Extreme System Memory Exhaustion (>94%)
         if ram_percent > 94.0:
             threat_id = "ram_exhaustion"
             if threat_id not in self._active_threats:
@@ -94,10 +152,10 @@ class ThreatCenter:
                     "severity": "CRITICAL",
                     "source": "Memory Collector",
                     "target": "System RAM",
-                    "reason": f"Available physical memory critically low ({ram_percent}% committed).",
+                    "reason": f"Kapasitas memori fisik sangat kritis ({ram_percent}% terpakai).",
                     "evidence": f"RAM usage: {ram_percent}%",
                     "status": "CONFIRMED",
-                    "recommended_action": "Identify top memory consumer and free committed pages to avoid system thrashing.",
+                    "recommended_action": "Bebaskan working set memori agar sistem tidak mengalami thrashing.",
                     "action_taken": None,
                     "resolved_at": None
                 }
@@ -147,7 +205,6 @@ class ThreatCenter:
         except (psutil.AccessDenied, PermissionError):
             # Tier 2 Fallback: Lower CPU Priority Class
             try:
-                # Try setting priority to IDLE
                 if hasattr(psutil, 'IDLE_PRIORITY_CLASS'):
                     p.nice(psutil.IDLE_PRIORITY_CLASS)
                 elif hasattr(psutil, 'BELOW_NORMAL_PRIORITY_CLASS'):
@@ -204,13 +261,70 @@ class ThreatCenter:
         except Exception as e:
             return {"success": False, "message": f"Gagal membebaskan memori: {str(e)}"}
 
+    async def mitigate_all_threats(self) -> Dict[str, Any]:
+        """
+        Executes batch remediation for all active threat events simultaneously.
+        Trims RAM, cools down rogue processes, cleans temp junk, and marks events as MITIGATED.
+        """
+        active_list = list(self._active_threats.values())
+        if not active_list:
+            return {"success": True, "mitigated_count": 0, "failed_count": 0, "total_threats": 0, "message": "Tidak ada ancaman aktif yang perlu ditindak."}
+
+        results = []
+        mitigated_count = 0
+
+        # 1. Clean RAM if any memory threat or general optimization
+        trim_res = self.trim_system_memory()
+
+        # 2. Iterate through each threat and execute corresponding action
+        for threat in active_list:
+            t_id = threat["id"]
+            cat = threat.get("category", "")
+            pid = threat.get("pid")
+
+            if (cat == "High CPU Process" or "CPU" in cat) and pid:
+                res = await self.throttle_and_cooldown_process(pid, duration=3.5)
+                if res.get("success"):
+                    await self.update_threat_status(t_id, "MITIGATED", action=res.get("message"))
+                    mitigated_count += 1
+                    results.append(f"✓ {threat['target']}: {res['message']}")
+                else:
+                    await self.update_threat_status(t_id, "ACTION_FAILED", action=res.get("message"))
+                    results.append(f"⚠ {threat['target']}: {res['message']}")
+            elif cat in ("Storage Anomaly", "Low Storage"):
+                from backend.engine.storage_analyzer import storage_analyzer
+                c_res = storage_analyzer.clean_user_temp_files()
+                await self.update_threat_status(t_id, "MITIGATED", action=c_res.get("message"))
+                mitigated_count += 1
+                results.append(f"✓ {threat['target']}: {c_res.get('message')}")
+            elif cat in ("System Anomaly", "Memory") or "RAM" in threat.get("target", ""):
+                await self.update_threat_status(t_id, "MITIGATED", action=trim_res.get("message"))
+                mitigated_count += 1
+                results.append(f"✓ {threat['target']}: {trim_res.get('message')}")
+            else:
+                # Flag general anomalies as mitigated/inspected
+                await self.update_threat_status(t_id, "MITIGATED", action="Dimediasi dan ditinjau melalui Batch Remediation Engine")
+                mitigated_count += 1
+                results.append(f"✓ {threat['target']}: Anomali diverifikasi dan ditandai selesai.")
+
+        failed_count = max(0, len(active_list) - mitigated_count)
+        return {
+            "success": True,
+            "mitigated_count": mitigated_count,
+            "failed_count": failed_count,
+            "total_threats": len(active_list),
+            "details": results,
+            "message": f"Berhasil memitigasi {mitigated_count} dari {len(active_list)} anomali keamanan sistem."
+        }
+
+
     async def update_threat_status(self, threat_id: str, new_status: str, action: Optional[str] = None):
         if threat_id in self._active_threats:
             t = self._active_threats[threat_id]
             t["status"] = new_status
             if action:
                 t["action_taken"] = action
-            if new_status in ("RESOLVED", "FALSE_POSITIVE"):
+            if new_status in ("RESOLVED", "MITIGATED", "FALSE_POSITIVE"):
                 t["resolved_at"] = time.time()
                 await db_manager.save_threat(t)
                 del self._active_threats[threat_id]

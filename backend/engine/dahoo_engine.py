@@ -82,9 +82,15 @@ class DahooEngine:
             if t_obj and t_obj.get("pid"):
                 await threat_center.throttle_and_cooldown_process(t_obj["pid"], duration=3.5)
 
-            await threat_center.update_threat_status(threat_id, "RESOLVED", action="Dimediasi dan diselesaikan via Dahoo Assistant")
+            await threat_center.update_threat_status(threat_id, "MITIGATED", action="Dimediasi dan diselesaikan via Dahoo Assistant")
             self._pending_action = None
             return {"success": True, "message": f"Ancaman {threat_id} berhasil dimitigasi dan ditandai selesai."}
+
+        # 5. Batch Mitigate All Threats
+        elif action_type in ("MITIGATE_ALL_THREATS", "BATCH_RESOLVE", "RESOLVE_ALL"):
+            res = await threat_center.mitigate_all_threats()
+            self._pending_action = None
+            return res
 
         return {"success": False, "message": f"Aksi '{action_type}' tidak dikenali."}
 
@@ -110,8 +116,42 @@ class DahooEngine:
             active_top_proc = top_procs[0]
 
         # 0. User Confirmation / Immediate Action Execution
-        confirm_words = ["ya", "yes", "oke", "ok", "lakukan", "setuju", "eksekusi", "jalankan", "perbaiki", "bantu", "boleh", "sip", "yup", "siap", "tangguhkan", "bersihkan", "gas"]
+        batch_triggers = [
+            "lakukan tindakan", "selesaikan", "optimalkan", "perbaiki", "tindak semua",
+            "mitigasi semua", "bereskan", "solve all", "fix all", "bersihkan semua", "tangani semua", "tindak"
+        ]
+        confirm_words = ["ya", "yes", "oke", "ok", "lakukan", "setuju", "eksekusi", "jalankan", "bantu", "boleh", "sip", "yup", "siap", "gas"]
         cancel_words = ["tidak", "no", "batal", "jangan", "skip", "abaikan", "ga usah", "gak", "nggak", "nanti"]
+
+        # Batch Action Trigger (Directly resolves all threats if any active)
+        if any(w in q for w in batch_triggers):
+            if len(threats) > 0:
+                res = await self.execute_action("MITIGATE_ALL_THREATS")
+                if res.get("success"):
+                    dt_str = "\n".join(f"- {d}" for d in res.get("details", []))
+                    return (
+                        f"✅ **Tindakan Massal Berhasil Dijalankan!** 🐺\n\n"
+                        f"{res.get('message')}\n\n"
+                        f"**Detail Hasil Mitigasi:**\n{dt_str}\n\n"
+                        f"Semua dot merah dan anomali di Threat Center kini telah bersih dan dimitigasi. 🛡️"
+                    ), None
+                else:
+                    return f"⚠️ **Upaya mitigasi massal terkendala:** {res.get('message')}", None
+            elif self._pending_action:
+                act = self._pending_action
+                res = await self.execute_action(act["type"], act.get("params", {}))
+                if res.get("success"):
+                    return f"✅ **Tindakan Berhasil Dijalankan!**\n\n{res.get('message')}\n\nSistem kini terpantau stabil.", None
+                else:
+                    return f"⚠️ **Upaya tindakan mengalami kendala:** {res.get('message')}", None
+            else:
+                # No active threats: Perform routine memory trim & cache optimization
+                trim_res = threat_center.trim_system_memory()
+                return (
+                    f"✅ **Sistem Dioptimalkan!** 🐺\n\n"
+                    f"{trim_res.get('message')}\n\n"
+                    f"Tidak ada ancaman keamanan yang terdeteksi saat ini. Beban prosesor dan memori terpantau normal dan stabil."
+                ), None
 
         # Direct action trigger: Cooldown / Tangguhkan
         if any(w in q for w in ["tangguhkan", "cooldown", "dinginkan cpu", "pause proses"]):
@@ -329,10 +369,23 @@ class DahooEngine:
             t_count = len(threats)
             if t_count == 0:
                 return "Kabar baik! Saat ini **tidak ada ancaman atau anomali aktif** yang terdeteksi di Threat Center. Sistem aman terkendali. 🛡️", None
+            elif t_count > 1:
+                ans = (
+                    f"⚠️ Terdapat **{t_count} anomali keamanan** aktif di Threat Center:\n\n"
+                    f"- Anomali terdeteksi pada beberapa resource/proses.\n"
+                    f"- Contoh: **{threats[0].get('category')}** pada {threats[0].get('target')}.\n\n"
+                    f"Apakah kamu ingin aku **langsung menindak dan memitigasi semua {t_count} anomali ini sekaligus**?"
+                )
+                self._pending_action = {
+                    "type": "MITIGATE_ALL_THREATS",
+                    "params": {},
+                    "label": f"Tindak Semua ({t_count} Anomali)"
+                }
+                return ans, self._pending_action
             else:
                 top_t = threats[0]
                 ans = (
-                    f"⚠️ Terdapat **{t_count} anomali keamanan** aktif di Threat Center:\n\n"
+                    f"⚠️ Terdapat **1 anomali keamanan** aktif di Threat Center:\n\n"
                     f"- **Kategori**: {top_t.get('category')}\n"
                     f"- **Target**: {top_t.get('target')}\n"
                     f"- **Tingkat Bahaya**: {top_t.get('severity')}\n"
@@ -395,7 +448,7 @@ class DahooEngine:
             f"ActiveThreats={len(telemetry.get('threats', []))}, {top_str}. "
             f"Rules: Reply concisely in Indonesian (1-3 sentences), warm tone (Aww/🐺). "
             f"Minimize tokens strictly. If user asks to fix lag or cool down CPU or system needs action, end message with exact tag: "
-            f"[ACTION:COOLDOWN:pid:name] or [ACTION:TRIM_RAM] or [ACTION:CLEAN_TEMP]."
+            f"[ACTION:MITIGATE_ALL] or [ACTION:COOLDOWN:pid:name] or [ACTION:TRIM_RAM] or [ACTION:CLEAN_TEMP]."
         )
 
         try:
@@ -420,8 +473,17 @@ class DahooEngine:
             action_data = None
             reply = raw_reply
 
-            match_cooldown = re.search(r'\[ACTION:COOLDOWN:(\d+):?([^\]]*)\]', reply, re.IGNORECASE)
-            if match_cooldown:
+            if "[ACTION:MITIGATE_ALL]" in reply or "[ACTION:MITIGATE_ALL_THREATS]" in reply:
+                t_count = len(telemetry.get("threats", []))
+                action_data = {
+                    "type": "MITIGATE_ALL_THREATS",
+                    "params": {},
+                    "label": f"Tindak Semua ({t_count} Anomali)" if t_count > 0 else "Optimalkan Sistem"
+                }
+                self._pending_action = action_data
+                reply = re.sub(r'\[ACTION:[^\]]+\]', '', reply).strip()
+            elif re.search(r'\[ACTION:COOLDOWN:(\d+):?([^\]]*)\]', reply, re.IGNORECASE):
+                match_cooldown = re.search(r'\[ACTION:COOLDOWN:(\d+):?([^\]]*)\]', reply, re.IGNORECASE)
                 act_pid = int(match_cooldown.group(1))
                 act_name = match_cooldown.group(2).strip() or f"PID {act_pid}"
                 action_data = {

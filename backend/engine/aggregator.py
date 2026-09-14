@@ -100,7 +100,9 @@ class Aggregator:
                 conn_list = self.current_state.get("socket", {}).get("connections", [])
                 cpu_total = self.latest_snapshot.get("cpu", {}).get("total_percent", 0.0)
                 ram_perc = self.latest_snapshot.get("memory", {}).get("percent", 0.0)
-                threat_center.scan_telemetry(procs.get("processes", []), conn_list, cpu_total, ram_perc)
+                drives_list = self.latest_snapshot.get("storage", {}).get("drives", [])
+                disk_io_data = self.latest_snapshot.get("storage", {}).get("io", {})
+                threat_center.scan_telemetry(procs.get("processes", []), conn_list, cpu_total, ram_perc, drives=drives_list, disk_io=disk_io_data)
             except Exception as e:
                 logger.error(f"Process worker error: {e}")
             await asyncio.sleep(2.5)

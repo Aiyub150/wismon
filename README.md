@@ -41,21 +41,23 @@ WISMON mengumpulkan telemetry dari Windows dan menampilkannya melalui dashboard 
 
 Fitur utamanya meliputi:
 
+- **Ultra-Fast Telemetry Loop**: Latensi loop berkurang dari ~707ms menjadi ~17ms (~97.6% latency drop) berkat caching cerdas swap memory dan adapter discovery.
+- **Hardware-Aware Storage Detection**: Mendeteksi model hardware asli melalui WMI (`Win32_DiskDrive`), membedakan Samsung NVMe SSD, SanDisk USB Flashdisk, dan SDHC Card secara akurat.
+- **Multi-Drive Storage Analyzer**: Memindai drive terpilih (`C:`, `D:`, `E:`, atau semua drive), mendeteksi folder sampah/cache raksasa (`node_modules`, `.cache`, `CrashDumps` > 20MB) dan file besar (> 100MB).
+- **Safe Review & Recycle Bin**: Pembersihan aman file dan folder dengan memindahkannya ke Windows Recycle Bin (dilengkapi OS guardrails yang melindungi `C:\Windows`, `Program Files`, dan sistem penting).
+- **Socket Explorer dengan Prioritas Internet**: Menyorot koneksi internet eksternal aktif (seperti TikTok, streaming, remote IP) di baris teratas, dilengkapi filter instan (`🌐 Internet Saja`, `Semua`, `ESTABLISHED`, `LISTENING`) dan search bar domain/IP.
+- **Batch Threat Mitigation**: Menindak seluruh anomali keamanan secara simultan via tombol *Tindak Semua* atau perintah asisten, dengan pelaporan status jujur (`MITIGATED` / `ACTION_FAILED`).
+- **Agentic Dahoo Assistant**: Mampu mengeksekusi mitigasi sistem secara langsung dari chat (*"lakukan tindakan"*, *"optimalkan sistem"*) dengan proteksi timeout 10 detik dan verifikasi status real-time.
 - CPU usage dan telemetry per-core.
-- RAM dan statistik memory tingkat lanjut.
+- RAM dan statistik memory kernel tingkat lanjut (Paged/Non-paged pool, Commit Charge).
 - GPU dan hardware telemetry.
-- Disk/storage usage serta aktivitas I/O.
-- Network throughput dan koneksi TCP/UDP.
-- Process Explorer untuk melihat proses yang menggunakan resource tinggi.
-- Windows Services Explorer.
-- Security Events dan deteksi beberapa anomali sistem.
-- Performance & History untuk melihat data monitoring.
-- Storage Analyzer untuk menemukan file yang besar/lama dan melakukan pembersihan tertentu.
-- Dahoo Assistant untuk menjelaskan kondisi komputer serta menawarkan beberapa tindakan perbaikan.
-- Dark Mode dan Light Mode.
+- Disk/storage throughput I/O real-time.
+- Process Explorer dan Windows Services Explorer.
+- Performance History dengan retensi lokal SQLite.
+- Dark Mode dan Light Mode terintegrasi TailAdmin.
 - Streaming telemetry real-time menggunakan Server-Sent Events (SSE).
 
-Secara arsitektur, WISMON menggunakan FastAPI sebagai backend/API, SQLite sebagai database lokal, collector Windows sebagai sumber telemetry, dan frontend HTML/CSS/JavaScript sebagai dashboard. Struktur repository saat ini memisahkan `backend/`, `frontend/`, `database/`, serta `monitor.py` sebagai entry point utama.
+Secara arsitektur, WISMON menggunakan FastAPI sebagai backend/API berlatensi ultra-rendah, SQLite sebagai database lokal, collector Windows sebagai sumber telemetry, dan TailAdmin HTML/CSS/JavaScript murni sebagai dashboard. Struktur repository saat ini memisahkan `backend/`, `frontend/`, `database/`, `Fix/`, serta `monitor.py` sebagai entry point utama.
 
 ---
 
@@ -532,17 +534,12 @@ System → Storage
 
 Gunakan untuk:
 
-- melihat kapasitas storage,
-- melihat aktivitas disk/I/O,
-- mencari file besar,
-- mencari file lama,
-- melakukan pembersihan tertentu.
-
-### Sebelum menghapus file
-
-Pastikan file tersebut memang aman dihapus.
-
-Jangan menghapus file sistem/program yang tidak Anda pahami.
+- **Melihat Kapasitas & Hardware Model Asli**: Menampilkan kartu drive dengan model perangkat keras (Samsung NVMe SSD, SanDisk USB, SDHC card), tipe antarmuka (NVMe, USB, SCSI), status partisi, dan ruang bebas.
+- **Memantau Aktivitas Disk I/O**: Grafik throughput disk live (Read Rate & Write Rate dalam MB/s serta I/O ops/sec).
+- **Storage Analyzer Multi-Drive**: Pilih target pemindaian (`Semua Drive`, `Drive C:\`, `Drive D:\`, atau `Drive E:\`).
+- **Mendeteksi Folder Sampah/Cache**: Menemukan direktori `node_modules`, `.cache`, `.gradle`, dan `CrashDumps` yang memakan ruang > 20 MB.
+- **Mencari File Besar (> 100 MB)**: Menemukan file video, arsip zip, ISO, installer, dan backup yang membebani disk.
+- **Safe Review Mode & Recycle Bin**: Setiap pembersihan file atau folder dipindahkan ke **Windows Recycle Bin** (bukan dihapus permanen), sehingga dapat dipulihkan sewaktu-waktu. Dilengkapi guardrails ketat yang mencegah penghapusan folder sistem `C:\Windows` atau `Program Files`.
 
 ---
 
@@ -556,13 +553,15 @@ System → Network
 
 Gunakan untuk memahami:
 
-- adapter jaringan aktif,
-- download throughput,
-- upload throughput,
-- koneksi TCP/UDP,
-- informasi host/domain yang terkait koneksi.
-
-Menu ini lebih ditujukan untuk pengguna teknis.
+- **Adapter Jaringan Aktif**: Menampilkan IP internal, gateway, MAC address, link speed, dan status adapter (Wi-Fi, Ethernet, Virtual).
+- **Live Throughput Curve**: Grafik bandwidth real-time dengan pemisahan laju Download (KB/s) dan Upload (KB/s).
+- **Socket Explorer dengan Prioritas Internet**: Menampilkan koneksi jaringan aktif yang secara cerdas memprioritaskan koneksi eksternal remote (seperti TikTok, YouTube, web browsing, remote server) di baris teratas agar tidak tertimbun oleh koneksi loopback lokal.
+- **Pencarian Domain & IP**: Kolom pencarian instan untuk memfilter host domain, alamat IP tujuan, PID, atau nama proses.
+- **Filter Koneksi Interaktif**:
+  - `🌐 Internet / Eksternal Saja` (default: langsung menampilkan aktivitas koneksi ke dunia luar).
+  - `Semua Koneksi (All)`.
+  - `ESTABLISHED Saja`.
+  - `LISTENING Saja`.
 
 ---
 
@@ -641,29 +640,22 @@ Buka:
 Security → Security Events
 ```
 
-Menampilkan anomaly/security event yang terdeteksi WISMON.
+Menampilkan anomali keamanan sistem secara komprehensif:
 
-Contoh kategori yang didokumentasikan project:
-
-- penggunaan CPU ekstrem,
-- lonjakan koneksi tertentu,
-- tekanan/kepenuhan memory.
+- **Kategori Anomali Terdeteksi**:
+  - Penggunaan CPU ekstrem dan proses rogue (High CPU).
+  - Tekanan memori dan kebocoran working set.
+  - Disk space menipis (< 10% atau < 5 GB).
+  - Lonjakan koneksi socket keluar (Outbound Connection Spike).
+  - Eksekusi file mencurigakan dari direktori Temp (`AppData\Local\Temp`).
+- **Batch Remediation Engine**:
+  - Tombol **⚡ Tindak Semua (Mitigate All)** pada antarmuka untuk memitigasi seluruh anomali aktif secara otomatis dalam satu klik.
+  - Membebaskan memory working set proses, mendinginkan proses CPU tinggi, membersihkan temp junk, dan memperbarui status secara jujur (`MITIGATED` atau `ACTION_FAILED`).
+  - Sinkronisasi real-time: setelah mitigasi, event `threat-resolved` dipancarkan sehingga dashboard langsung ter-update tanpa reload.
 
 ### Penting: WISMON bukan antivirus
 
 Security Events adalah indikator untuk investigasi, bukan bukti absolut malware.
-
-Jangan mengartikan:
-
-```text
-0 Security Events = pasti bebas malware
-```
-
-atau:
-
-```text
-1 Security Event = pasti virus
-```
 
 ---
 
@@ -683,9 +675,19 @@ Gunakan untuk melihat data performa dan histori telemetry sehingga Anda dapat me
 
 Klik tombol **Dahoo** pada topbar.
 
-Dahoo dapat digunakan untuk pertanyaan monitoring maupun troubleshooting.
+Dahoo adalah asisten AI monitoring dan troubleshooting otonom yang dapat bekerja dalam dua mode: **Local Intelligence** (bawaan tanpa internet/API key) dan **Google Gemini Cloud AI**.
 
-### Contoh pertanyaan
+### Kemampuan Agentik Baru:
+- **Batch Action Execution**: Dahoo dapat mengeksekusi mitigasi sistem menyeluruh saat diminta melalui perintah bahasa alami:
+  - *"Lakukan tindakan"*
+  - *"Tindak semua ancaman"*
+  - *"Optimalkan sistem"*
+  - *"Selesaikan masalah sekarang"*
+- **Multi-Step Feedback**: Menampilkan progres bertahap (*Validating target...* ➔ *Executing action...* ➔ *Verifying result...*).
+- **Proteksi Timeout 10 Detik**: Menggunakan `AbortController` untuk mencegah Dahoo stuck/hang jika ada proses sistem yang membutuhkan waktu lama.
+- **Verifikasi Hasil**: Menampilkan hasil tindakan secara transparan (apakah sukses atau gagal beserta alasannya).
+
+### Contoh pertanyaan & perintah
 
 ```text
 Kenapa laptop saya lemot?
@@ -696,24 +698,19 @@ Berapa penggunaan RAM saya?
 ```
 
 ```text
+Lakukan tindakan untuk menyelesaikan semua masalah sistem
+```
+
+```text
+Bersihkan memori dan optimalkan komputer
+```
+
+```text
 Proses mana yang paling banyak menggunakan CPU?
 ```
 
-```text
-Kenapa CPU saya tinggi?
-```
-
-```text
-Bersihkan memori
-```
-
-```text
-Tangguhkan proses yang menggunakan CPU tinggi
-```
-
-Dahoo dapat menampilkan tombol tindakan tertentu. Baca penjelasan dan hasil yang ditampilkan sebelum menjalankan tindakan yang memengaruhi sistem.
-
 ---
+
 
 # 🔄 Cara Memahami Status WISMON
 

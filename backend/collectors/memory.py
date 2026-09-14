@@ -3,6 +3,7 @@ Memory Collector for Windows System Monitoring.
 Provides basic RAM statistics plus deep memory metrics via Win32 GetPerformanceInfo.
 """
 
+import time
 import ctypes
 from ctypes import wintypes
 import psutil
@@ -31,6 +32,8 @@ class MemoryCollector(BaseCollector):
     def __init__(self, interval: float = 1.0):
         super().__init__(name="memory", interval=interval)
         self._psapi = None
+        self._last_swap = None
+        self._last_swap_time = 0.0
         try:
             self._psapi = ctypes.windll.psapi
         except Exception:
@@ -71,9 +74,31 @@ class MemoryCollector(BaseCollector):
         }
 
     def collect(self) -> Dict[str, Any]:
+        now = time.time()
         vmem = psutil.virtual_memory()
-        swap = psutil.swap_memory()
         deep = self._get_deep_memory()
+
+        # Cache psutil.swap_memory() for 20 seconds to eliminate 600ms disk/registry I/O bottleneck
+        if self._last_swap is None or (now - self._last_swap_time) > 20.0:
+            try:
+                raw_swap = psutil.swap_memory()
+                self._last_swap = {
+                    "total_bytes": raw_swap.total,
+                    "used_bytes": raw_swap.used,
+                    "free_bytes": raw_swap.free,
+                    "percent": round(raw_swap.percent, 1)
+                }
+            except Exception:
+                commit_total = deep.get("commit_charge", 0)
+                commit_limit = deep.get("commit_limit", 1)
+                swap_pct = round((commit_total / max(1, commit_limit)) * 100, 1)
+                self._last_swap = {
+                    "total_bytes": commit_limit,
+                    "used_bytes": commit_total,
+                    "free_bytes": max(0, commit_limit - commit_total),
+                    "percent": swap_pct
+                }
+            self._last_swap_time = now
 
         return {
             "total_bytes": vmem.total,
@@ -82,12 +107,7 @@ class MemoryCollector(BaseCollector):
             "free_bytes": vmem.free,
             "cached_bytes": getattr(vmem, "cached", deep.get("system_cache", 0)),
             "percent": round(vmem.percent, 1),
-            "swap": {
-                "total_bytes": swap.total,
-                "used_bytes": swap.used,
-                "free_bytes": swap.free,
-                "percent": round(swap.percent, 1)
-            },
+            "swap": self._last_swap,
             "deep": deep,
             "status": "online"
         }

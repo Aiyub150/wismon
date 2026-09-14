@@ -629,9 +629,23 @@
 
         <!-- PAGE: Storage -->
         <section id="page-storage" class="page-view">
-          <div class="card-header" style="border: none; padding-bottom: 0;">
-            <h2 style="font-family: var(--font-display); font-size: 1.25rem;">Mounted Disks & Volumes</h2>
-            <button class="btn btn-primary" id="run-storage-scan-btn">Run Storage Analyzer Scan</button>
+          <div class="card-header" style="border: none; padding-bottom: 0; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <h2 style="font-family: var(--font-display); font-size: 1.25rem;">Mounted Disks & Storage Hardware</h2>
+              <p class="text-muted" style="font-size: 0.8rem; margin: 0;">Real-time disk throughput, hardware bus detection, and intelligent storage analyzer.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="storage-scan-target" class="select-control" style="width: 170px; height: 38px;">
+                <option value="">Semua Drive (All)</option>
+                <option value="C:">Drive C:\</option>
+                <option value="D:">Drive D:\</option>
+                <option value="E:">Drive E:\</option>
+              </select>
+              <button class="btn btn-primary" id="run-storage-scan-btn">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Scan Storage Analyzer
+              </button>
+            </div>
           </div>
 
           <!-- Drives List -->
@@ -672,8 +686,11 @@
           <!-- Storage Analyzer Results Container -->
           <div class="card" id="storage-analyzer-results" style="display: none; margin-top: 1.5rem;">
             <div class="card-header">
-              <div class="card-title">Storage Analyzer Insights (Safe Review Mode)</div>
-              <span class="badge badge-info">Never auto-deletes files</span>
+              <div>
+                <div class="card-title">Storage Analyzer Insights (Safe Review Mode)</div>
+                <span class="badge badge-info">Never auto-deletes files • Moves to Windows Recycle Bin</span>
+              </div>
+              <span class="badge badge-neutral font-mono" id="analyzer-target-badge">Target: All Drives</span>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
@@ -685,8 +702,27 @@
               <div class="card" style="padding: 0.75rem; background: var(--bg-body);">
                 <span class="text-muted" style="font-size: 0.75rem;">Estimated Reclaimable</span>
                 <div class="font-mono text-success" id="analyzer-reclaimable" style="font-size: 1.25rem; font-weight: 700;">0 MB</div>
-                <span class="text-muted" style="font-size: 0.7rem;">Old/Temp cleanup potential</span>
+                <span class="text-muted" style="font-size: 0.7rem;">Old/Temp/Junk cleanup potential</span>
               </div>
+            </div>
+
+            <h4 style="font-size: 0.875rem; margin: 1rem 0 0.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📁 Unused & Junk Cache Folders (node_modules, .cache, build dumps)</span>
+            </h4>
+            <div class="table-container" style="margin-bottom: 1.5rem;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Folder Name & Path</th>
+                    <th>Estimated Size</th>
+                    <th>Category</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="analyzer-junk-folders-tbody">
+                  <tr><td colspan="4" class="text-center text-muted">Click "Scan Storage Analyzer" above to discover cleanable cache folders.</td></tr>
+                </tbody>
+              </table>
             </div>
 
             <h4 style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Largest Discovered Files (> 100 MB)</h4>
@@ -701,7 +737,7 @@
                   </tr>
                 </thead>
                 <tbody id="analyzer-large-files-tbody">
-                  <tr><td colspan="4" class="text-center text-muted">Click "Run Storage Analyzer Scan" above to discover cleanable files.</td></tr>
+                  <tr><td colspan="4" class="text-center text-muted">Click "Scan Storage Analyzer" above to discover cleanable files.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -732,7 +768,7 @@
                 </div>
                 <div class="card" style="padding: 0.85rem; background: var(--bg-body);">
                   <span class="text-muted" style="font-size: 0.75rem;">Upload</span>
-                  <div class="font-mono" id="net-ul-speed" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary);">0.0 KB/s</div>
+                  <div class="font-mono text-primary" id="net-ul-speed" style="font-size: 1.25rem; font-weight: 700;">0.0 KB/s</div>
                 </div>
               </div>
             </div>
@@ -748,9 +784,21 @@
 
           <!-- Socket Explorer -->
           <div class="card" id="section-sockets">
-            <div class="card-header">
-              <div class="card-title">Socket Explorer & Reverse DNS Resolution</div>
-              <span class="badge badge-info" id="sockets-count-badge">0 Sockets</span>
+            <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+              <div>
+                <div class="card-title">Socket Explorer & Reverse DNS Resolution</div>
+                <div class="text-muted" style="font-size: 0.75rem;">Prioritizes external internet connections and resolved domains over local loopbacks.</div>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="socket-search-input" class="input-control" placeholder="Search domain, IP, process..." style="width: 220px; height: 36px;">
+                <select id="socket-filter-select" class="select-control" style="width: 190px; height: 36px;">
+                  <option value="external">🌐 Internet / Eksternal Saja</option>
+                  <option value="all">Semua Koneksi (All)</option>
+                  <option value="established">ESTABLISHED Saja</option>
+                  <option value="listening">LISTENING Saja</option>
+                </select>
+                <span class="badge badge-info" id="sockets-count-badge">0 Sockets</span>
+              </div>
             </div>
             <div class="table-container">
               <table class="data-table">
@@ -874,7 +922,12 @@
               <h2 style="font-family: var(--font-display); font-size: 1.25rem;">Threat Center & Security Intelligence</h2>
               <p class="text-secondary" style="font-size: 0.8rem; margin-top: 0.2rem;">Observes anomalous socket bursts, resource hogs, and critical security events with controlled mitigation.</p>
             </div>
-            <span class="badge badge-healthy" id="security-threat-badge">0 Active</span>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="badge badge-healthy" id="security-threat-badge">0 Active</span>
+              <button class="btn btn-primary btn-sm" id="security-mitigate-all-btn" onclick="securityPage.mitigateAllThreats()" style="display: none; padding: 5px 12px; font-weight: 600;">
+                ⚡ Tindak Semua (Mitigate All)
+              </button>
+            </div>
           </div>
 
           <!-- Active Threats -->

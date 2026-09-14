@@ -82,6 +82,9 @@ class SocketCollector(BaseCollector):
                 active_pids.add(pid)
             pname = self._resolve_process_name(pid)
 
+            is_loopback = not remote_ip or remote_ip in ("127.0.0.1", "::1", "0.0.0.0", "::") or remote_ip.startswith("127.")
+            is_external = bool(remote_ip and not is_loopback)
+
             connections_list.append({
                 "protocol": proto,
                 "local_address": laddr,
@@ -91,8 +94,17 @@ class SocketCollector(BaseCollector):
                 "remote_host": remote_host,
                 "state": c.status or "—",
                 "pid": pid,
-                "process_name": pname
+                "process_name": pname,
+                "is_external": is_external
             })
+
+        # Sort connections: External Established first, then external, then established, then listening
+        def _sort_key(conn):
+            ext = 1 if conn["is_external"] else 0
+            est = 1 if conn["state"] == "ESTABLISHED" else 0
+            return (ext * 2 + est), conn["remote_address"] != "—"
+
+        connections_list.sort(key=_sort_key, reverse=True)
 
         # Periodic cleanup of terminated PIDs in cache every 20 ticks (~1-2 min)
         self._cleanup_tick += 1
@@ -103,11 +115,13 @@ class SocketCollector(BaseCollector):
         # Summary statistics
         established = sum(1 for c in connections_list if c["state"] == "ESTABLISHED")
         listening = sum(1 for c in connections_list if c["state"] == "LISTEN")
+        external_count = sum(1 for c in connections_list if c["is_external"])
 
         return {
             "total_connections": len(connections_list),
             "established_count": established,
             "listening_count": listening,
+            "external_count": external_count,
             "connections": connections_list,
             "status": "online"
         }

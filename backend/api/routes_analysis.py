@@ -21,10 +21,17 @@ async def get_cpu_workload():
     top_proc = proc_data.get("top_cpu", [{}])[0] if proc_data.get("top_cpu") else {}
     return aggregator.analysis_engine.analyze_cpu_workload(total_cpu, top_proc)
 
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class StorageScanRequest(BaseModel):
+    drive: Optional[str] = Field(None, description="Target drive letter (e.g. C:, D:, E:) or directory to scan")
+
 @router.post("/storage/scan")
-async def trigger_storage_scan():
-    """Executes a background scan for large and temporary files."""
-    return storage_analyzer.scan()
+async def trigger_storage_scan(payload: Optional[StorageScanRequest] = None):
+    """Executes a scan for large files, unused folders, and temporary files on a designated drive or all drives."""
+    target_drive = payload.drive if payload else None
+    return storage_analyzer.scan(target_drive=target_drive)
 
 @router.get("/storage/last")
 async def get_last_storage_scan():
