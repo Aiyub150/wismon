@@ -33,12 +33,12 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Exclude Bug & Context folders and root markdown files (except README.md and Fix/ walkthroughs)
+# Exclude Bug, Context, and Fix folders, and markdown files (except README.md)
 /Bug/
 Bug/
 /Context/
 Context/
+/Fix/
+Fix/
 *.md
 !README.md
-!Fix/
-!Fix/**
