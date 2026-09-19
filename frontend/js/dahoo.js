@@ -2,7 +2,7 @@
  * Dahoo Assistant UI Controller.
  * Features an interactive Wolf Mascot with dynamic facial expressions,
  * session-aware conversational memory, WhatsApp-style bubbles, XSS protection,
- * and transparent AI mode routing (Gemini 3.8 Flash & Local Engine).
+ * and transparent AI mode routing (Gemini 3.6 Flash & Local Engine).
  */
 
 function escapeHtml(str) {
@@ -174,16 +174,20 @@ class DahooController {
           this.speechBubble.textContent = data.proactive_speech;
         }
         this.cloudAvailable = data.cloud_available || false;
+        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.6 Flash' : 'Offline Rule Engine');
+        // Clean any existing parenthesized suffix like (MEDIUM) to avoid duplicate (MEDIUM) (MEDIUM)
+        const cleanModel = rawModel.replace(/\s*\([A-Za-z0-9_-]+\)\s*$/, '').trim();
+
         if (this.modelBadge) {
-          this.modelBadge.textContent = data.provider_status || (this.cloudAvailable ? '● Gemini 3.8 Flash (Auto)' : '● Local Engine (Offline)');
+          this.modelBadge.textContent = data.provider_status || (this.cloudAvailable ? `● ${cleanModel} (Auto)` : '● Local Engine (Offline)');
         }
         if (this.thinkingBadge) {
           const lvl = data.thinking_level || 'medium';
-          this.thinkingBadge.textContent = this.cloudAvailable ? `${data.active_model || 'Gemini 3.8 Flash'} (${lvl.toUpperCase()})` : 'Offline Rule Engine';
+          this.thinkingBadge.textContent = this.cloudAvailable ? `${cleanModel} (${lvl.toUpperCase()})` : 'Offline Rule Engine';
         }
         if (this.providerStatus) {
           this.providerStatus.innerHTML = this.cloudAvailable 
-            ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span> <span>Auto: ${data.active_model || 'Gemini 3.8 Flash'}</span>`
+            ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span> <span>Auto: ${cleanModel}</span>`
             : `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #94A3B8;"></span> <span>Offline: Local Engine</span>`;
         }
         if (this.fallbackHint) {
@@ -499,7 +503,7 @@ class DahooController {
         const data = await res.json();
         const totalTok = (data.input_tokens || 0) + (data.output_tokens || 0);
         const metaText = data.engine === 'cloud' 
-          ? `${data.model || 'Gemini 3.8 Flash'} (${totalTok} tok)`
+          ? `${data.model || 'Gemini 3.6 Flash'} (${totalTok} tok)`
           : 'Dahoo Local Engine';
         this.appendMessage('assistant', data.reply, metaText, data.action);
         this.updateMetrics();

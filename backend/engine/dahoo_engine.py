@@ -701,7 +701,7 @@ class DahooEngine:
                 "estimated_cost": 0.0
             }
 
-        # 3. Gemini Cloud LLM Path (Token-optimized, Context-routed, Multi-turn, Gemini 3.8 Flash)
+        # 3. Gemini Cloud LLM Path (Token-optimized, Context-routed, Multi-turn, Gemini 3.6 Flash)
         routed_context = self._build_routed_context(message, telemetry)
 
         # Retrieve recent conversation turns if memory is enabled
@@ -751,18 +751,33 @@ class DahooEngine:
             if chosen_level not in ("low", "medium", "high"):
                 chosen_level = "medium"
 
-            def _call_gemini():
-                return self._genai_client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=full_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_context,
-                        thinking_config=types.ThinkingConfig(thinking_level=chosen_level),
-                        max_output_tokens=1024
-                    )
-                )
+            # Candidate models: try configured model first, then verified stable Google AI Studio fallbacks
+            candidate_models = [GEMINI_MODEL]
+            for fallback_m in ("gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash"):
+                if fallback_m not in candidate_models:
+                    candidate_models.append(fallback_m)
 
-            response = await asyncio.to_thread(_call_gemini)
+            def _call_gemini():
+                last_exc = None
+                for m_name in candidate_models:
+                    try:
+                        resp = self._genai_client.models.generate_content(
+                            model=m_name,
+                            contents=full_prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_context,
+                                thinking_config=types.ThinkingConfig(thinking_level=chosen_level),
+                                max_output_tokens=1024,
+                                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                            )
+                        )
+                        return resp, m_name
+                    except Exception as exc:
+                        last_exc = exc
+                        continue
+                raise last_exc
+
+            response, active_model_used = await asyncio.to_thread(_call_gemini)
             raw_reply = response.text or "Aww, maaf aku sedang kesulitan berpikir saat ini."
 
             # Structured Action Tag Parsing
@@ -814,17 +829,20 @@ class DahooEngine:
             out_tokens = 0
             if response.usage_metadata:
                 in_tokens = response.usage_metadata.prompt_token_count or 0
-                out_tokens = response.usage_metadata.candidates_token_count or 0
+                candidate_tokens = response.usage_metadata.candidates_token_count or 0
+                thinking_tokens = getattr(response.usage_metadata, "thoughts_token_count", 0) or 0
+                # Google AI Studio bills output tokens inclusive of thinking tokens
+                out_tokens = candidate_tokens + thinking_tokens
 
             cost = ((in_tokens / 1_000_000) * INPUT_PRICE_PER_1M) + ((out_tokens / 1_000_000) * OUTPUT_PRICE_PER_1M)
 
             await db_manager.save_dahoo_message("user", message, session_id=session_id)
-            await db_manager.save_dahoo_message("assistant", reply, session_id=session_id, model=GEMINI_MODEL, in_tokens=in_tokens, out_tokens=out_tokens, cost=cost)
+            await db_manager.save_dahoo_message("assistant", reply, session_id=session_id, model=active_model_used, in_tokens=in_tokens, out_tokens=out_tokens, cost=cost)
 
             return {
                 "reply": reply,
                 "engine": "cloud",
-                "model": GEMINI_MODEL,
+                "model": active_model_used,
                 "thinking_level": chosen_level,
                 "session_id": session_id,
                 "action": action_data,
