@@ -91,7 +91,7 @@ class Aggregator:
         self._subscribers.discard(q)
 
     async def _process_worker(self):
-        """Background worker for process enumeration and threat scanning."""
+        """Background worker for process enumeration and threat scanning (adaptive interval)."""
         while self._running:
             try:
                 procs = await asyncio.to_thread(self.process_collector.collect_safe)
@@ -105,17 +105,19 @@ class Aggregator:
                 threat_center.scan_telemetry(procs.get("processes", []), conn_list, cpu_total, ram_perc, drives=drives_list, disk_io=disk_io_data)
             except Exception as e:
                 logger.error(f"Process worker error: {e}")
-            await asyncio.sleep(2.5)
+            # Adaptive sleep: 4.5s when active subscribers, 8.0s when idle
+            await asyncio.sleep(4.5 if self._subscribers else 8.0)
 
     async def _socket_worker(self):
-        """Background worker for network socket inspection."""
+        """Background worker for network socket inspection (adaptive interval)."""
         while self._running:
             try:
                 sockets = await asyncio.to_thread(self.socket_collector.collect_safe)
                 self.current_state["socket"] = sockets
             except Exception as e:
                 logger.error(f"Socket worker error: {e}")
-            await asyncio.sleep(4.0)
+            # Adaptive sleep: 6.0s when active subscribers, 12.0s when idle
+            await asyncio.sleep(6.0 if self._subscribers else 12.0)
 
     async def _services_worker(self):
         """Background worker for Windows services enumeration."""
@@ -125,17 +127,17 @@ class Aggregator:
                 self.current_state["services"] = services
             except Exception as e:
                 logger.error(f"Services worker error: {e}")
-            await asyncio.sleep(25.0)
+            await asyncio.sleep(30.0)
 
     async def _hardware_worker(self):
-        """Background worker for hardware and thermal telemetry."""
+        """Background worker for hardware and thermal telemetry (adaptive interval)."""
         while self._running:
             try:
                 hardware = await asyncio.to_thread(self.hardware_collector.collect_safe)
                 self.current_state["hardware"] = hardware
             except Exception as e:
                 logger.error(f"Hardware worker error: {e}")
-            await asyncio.sleep(8.0)
+            await asyncio.sleep(10.0 if self._subscribers else 15.0)
 
     async def _fast_collection_loop(self):
         """High-frequency ~1.0s telemetry loop delivering real-time UI frames."""

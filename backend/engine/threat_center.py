@@ -4,10 +4,33 @@ Tracks security events, suspicious resource usage, anomalous socket patterns,
 and enforces a structured threat lifecycle with safe, user-confirmed mitigation.
 """
 
+import os
 import time
 import uuid
 from typing import Dict, Any, List, Optional
+import psutil
 from backend.db import db_manager
+
+# Process Safety & EDR Protection Policies
+WISMON_PID = os.getpid()
+try:
+    WISMON_PPID = os.getppid()
+except Exception:
+    WISMON_PPID = None
+
+SECURITY_AGENTS = {
+    "bdservicehost.exe", "vsserv.exe", "bdredline.exe", "epsecurityservice.exe",
+    "msmpeng.exe", "nissrv.exe", "securityhealthservice.exe", "smartscreen.exe",
+    "csfalconservice.exe", "sentinelagent.exe", "sentinelctl.exe",
+    "mbamservice.exe", "avp.exe", "mcshield.exe", "mfetp.exe",
+    "rtvscan.exe", "ccsvchst.exe"
+}
+
+CRITICAL_SYSTEM_PROCESSES = {
+    "system", "system idle process", "smss.exe", "csrss.exe", "wininit.exe",
+    "services.exe", "lsass.exe", "winlogon.exe", "dwm.exe", "fontdrvhost.exe"
+}
+
 
 class ThreatCenter:
     def __init__(self):
@@ -167,22 +190,103 @@ class ThreatCenter:
     def get_threats(self) -> List[Dict[str, Any]]:
         return list(self._active_threats.values())
 
-    async def throttle_and_cooldown_process(self, pid: int, duration: float = 3.5) -> Dict[str, Any]:
+    async def throttle_and_cooldown_process(self, pid: int, duration: float = 3.5, expected_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        Active remediation for High CPU Process with Multi-Tier Fallback:
+        Active remediation for High CPU Process with Multi-Tier Fallback & Strict Safety Guardrails:
+        - Safety Check 1: Protect WISMON's own server process (PID & PPID) to prevent server hangs/crashes.
+        - Safety Check 2: Protect Security / EDR Agents (Bitdefender, Defender, CrowdStrike, etc.).
+        - Safety Check 3: Protect Windows Core Critical Processes (System, csrss, lsass, etc.).
+        - Verification: Validate process existence and name identity.
         Tier 1: Temporarily pause (suspend) process for cooldown duration.
         Tier 2 (Fallback): If suspend is denied, lower CPU priority to IDLE/BELOW_NORMAL.
-        Tier 3: Detailed diagnostic explanation with alternative tool options if all fail.
+        Tier 3: Detailed diagnostic explanation with alternative options if all fail.
         """
         import psutil
         import asyncio
+
+        # Safety Guardrail 1: WISMON Server Self-Protection
+        if pid == WISMON_PID or (WISMON_PPID and pid == WISMON_PPID) or (pid == os.getpid()):
+            return {
+                "success": False,
+                "error_code": "WISMON_SELF_PROCESS",
+                "is_protected": True,
+                "can_fallback": False,
+                "message": f"Tindakan ditolak demi stabilitas: PID {pid} adalah server utama WISMON. Penangguhan akan membekukan koneksi dan memicu crash aplikasi.",
+                "recommendation": "Untuk meringankan beban kerja WISMON, gunakan mode adaptive sampling atau tutup tab browser yang tidak digunakan."
+            }
+
+        # Safety Guardrail 2: Windows Critical Kernel Processes by PID
+        if pid in (0, 4):
+            return {
+                "success": False,
+                "error_code": "SYSTEM_CRITICAL_PROCESS",
+                "is_protected": True,
+                "can_fallback": False,
+                "message": f"Tindakan ditolak: PID {pid} merupakan proses inti kernel Windows yang tidak boleh ditangguhkan demi mencegah kegagalan sistem (BSOD).",
+                "recommendation": "Tunggu hingga aktivitas latar belakang Windows selesai secara wajar."
+            }
+
+        # Safety Guardrail 3: Expected Name Protection (Security Agents & System Processes)
+        if expected_name:
+            exp_lower = expected_name.lower()
+            if exp_lower in SECURITY_AGENTS or any(agent_kw in exp_lower for agent_kw in ("bitdefender", "bdservice", "vsserv", "edr", "antivirus", "defender")):
+                return {
+                    "success": False,
+                    "error_code": "SECURITY_AGENT_PROTECTED",
+                    "is_protected": True,
+                    "can_fallback": False,
+                    "message": f"Tindakan ditolak demi integritas endpoint: '{expected_name}' (PID: {pid}) adalah Agen Keamanan / EDR ({expected_name}). Penangguhan dapat memicu alarm keamanan Windows dan melemahkan proteksi.",
+                    "recommendation": f"Periksa status pemindaian atau jadwal proteksi langsung melalui konsol aplikasi keamanan {expected_name}."
+                }
+            if exp_lower in CRITICAL_SYSTEM_PROCESSES:
+                return {
+                    "success": False,
+                    "error_code": "SYSTEM_CRITICAL_PROCESS",
+                    "is_protected": True,
+                    "can_fallback": False,
+                    "message": f"Tindakan ditolak: '{expected_name}' (PID: {pid}) merupakan proses inti kernel Windows yang tidak boleh ditangguhkan demi mencegah kegagalan sistem (BSOD).",
+                    "recommendation": "Tunggu hingga aktivitas latar belakang Windows selesai secara wajar."
+                }
+
         if not psutil.pid_exists(pid):
-            return {"success": False, "message": f"Proses PID {pid} sudah tidak aktif di sistem."}
+            return {"success": False, "message": f"Proses PID {pid} sudah tidak aktif di sistem.", "can_fallback": False}
+
         try:
             p = psutil.Process(pid)
             pname = p.name()
+            pname_lower = pname.lower()
         except Exception as e:
-            return {"success": False, "message": f"Tidak dapat mengakses proses PID {pid}: {str(e)}"}
+            return {"success": False, "message": f"Tidak dapat mengakses proses PID {pid}: {str(e)}", "can_fallback": False}
+
+        # Target Identity Verification (Name mismatch check)
+        if expected_name and expected_name.lower() not in pname_lower:
+            return {
+                "success": False,
+                "error_code": "IDENTITY_MISMATCH",
+                "can_fallback": False,
+                "message": f"Identitas target tidak sesuai: PID {pid} terdeteksi sebagai '{pname}' (bukan '{expected_name}'). Tindakan dibatalkan demi keselamatan sistem."
+            }
+
+        # Safety Guardrail 4: Live Process Name Checks
+        if pname_lower in SECURITY_AGENTS or any(agent_kw in pname_lower for agent_kw in ("bitdefender", "bdservice", "vsserv", "edr", "antivirus", "defender")):
+            return {
+                "success": False,
+                "error_code": "SECURITY_AGENT_PROTECTED",
+                "is_protected": True,
+                "can_fallback": False,
+                "message": f"Tindakan ditolak demi integritas endpoint: '{pname}' (PID: {pid}) adalah Agen Keamanan / EDR ({pname}). Penangguhan dapat memicu alarm keamanan Windows dan melemahkan proteksi.",
+                "recommendation": f"Periksa status pemindaian atau jadwal proteksi langsung melalui konsol aplikasi keamanan {pname}."
+            }
+
+        if pname_lower in CRITICAL_SYSTEM_PROCESSES:
+            return {
+                "success": False,
+                "error_code": "SYSTEM_CRITICAL_PROCESS",
+                "is_protected": True,
+                "can_fallback": False,
+                "message": f"Tindakan ditolak: '{pname}' (PID: {pid}) merupakan proses inti kernel Windows yang tidak boleh ditangguhkan demi mencegah kegagalan sistem (BSOD).",
+                "recommendation": "Tunggu hingga aktivitas latar belakang Windows selesai secara wajar."
+            }
 
         # Tier 1: Try suspend/resume
         try:
@@ -264,7 +368,8 @@ class ThreatCenter:
     async def mitigate_all_threats(self) -> Dict[str, Any]:
         """
         Executes batch remediation for all active threat events simultaneously.
-        Trims RAM, cools down rogue processes, cleans temp junk, and marks events as MITIGATED.
+        Trims RAM, cools down rogue processes, cleans temp junk, and marks events truthfully
+        (MITIGATED vs PROTECTED_SKIPPED vs ACTION_FAILED).
         """
         active_list = list(self._active_threats.values())
         if not active_list:
@@ -272,6 +377,7 @@ class ThreatCenter:
 
         results = []
         mitigated_count = 0
+        skipped_count = 0
 
         # 1. Clean RAM if any memory threat or general optimization
         trim_res = self.trim_system_memory()
@@ -284,7 +390,11 @@ class ThreatCenter:
 
             if (cat == "High CPU Process" or "CPU" in cat) and pid:
                 res = await self.throttle_and_cooldown_process(pid, duration=3.5)
-                if res.get("success"):
+                if res.get("is_protected"):
+                    await self.update_threat_status(t_id, "PROTECTED_SKIPPED", action=res.get("message"))
+                    skipped_count += 1
+                    results.append(f"🛡️ {threat['target']}: {res['message']}")
+                elif res.get("success"):
                     await self.update_threat_status(t_id, "MITIGATED", action=res.get("message"))
                     mitigated_count += 1
                     results.append(f"✓ {threat['target']}: {res['message']}")
@@ -307,16 +417,22 @@ class ThreatCenter:
                 mitigated_count += 1
                 results.append(f"✓ {threat['target']}: Anomali diverifikasi dan ditandai selesai.")
 
-        failed_count = max(0, len(active_list) - mitigated_count)
+        failed_count = max(0, len(active_list) - mitigated_count - skipped_count)
+        msg_parts = [f"Berhasil memitigasi {mitigated_count} anomali"]
+        if skipped_count > 0:
+            msg_parts.append(f"{skipped_count} proses terproteksi dilewati demi keselamatan sistem")
+        if failed_count > 0:
+            msg_parts.append(f"{failed_count} memerlukan tindakan manual")
+
         return {
             "success": True,
             "mitigated_count": mitigated_count,
+            "skipped_count": skipped_count,
             "failed_count": failed_count,
             "total_threats": len(active_list),
             "details": results,
-            "message": f"Berhasil memitigasi {mitigated_count} dari {len(active_list)} anomali keamanan sistem."
+            "message": ", ".join(msg_parts) + "."
         }
-
 
     async def update_threat_status(self, threat_id: str, new_status: str, action: Optional[str] = None):
         if threat_id in self._active_threats:
@@ -324,7 +440,7 @@ class ThreatCenter:
             t["status"] = new_status
             if action:
                 t["action_taken"] = action
-            if new_status in ("RESOLVED", "MITIGATED", "FALSE_POSITIVE"):
+            if new_status in ("RESOLVED", "MITIGATED", "FALSE_POSITIVE", "PROTECTED_SKIPPED"):
                 t["resolved_at"] = time.time()
                 await db_manager.save_threat(t)
                 del self._active_threats[threat_id]

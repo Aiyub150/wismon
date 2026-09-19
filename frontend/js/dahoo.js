@@ -35,11 +35,12 @@ class DahooController {
     this.chatBody = document.getElementById('dahoo-chat-body');
     this.chatInput = document.getElementById('dahoo-input');
     this.sendBtn = document.getElementById('dahoo-send-btn');
-    this.cloudToggle = document.getElementById('dahoo-cloud-toggle');
     this.modelBadge = document.getElementById('dahoo-model-badge');
     this.thinkingBadge = document.getElementById('dahoo-thinking-badge');
     this.costBadge = document.getElementById('dahoo-cost-badge');
     this.tokenBadge = document.getElementById('dahoo-tokens-badge');
+    this.providerStatus = document.getElementById('dahoo-provider-status');
+    this.fallbackHint = document.getElementById('dahoo-provider-fallback-hint');
     this.cloudAvailable = false;
     this.currentEmotion = 'normal';
 
@@ -129,15 +130,6 @@ class DahooController {
       });
     });
 
-    if (this.cloudToggle) {
-      this.cloudToggle.addEventListener('change', () => {
-        const isCloud = this.cloudToggle.checked;
-        if (this.modelBadge) {
-          this.modelBadge.textContent = isCloud ? '● Gemini 3.8 Flash (Active)' : '● Local AI (Offline)';
-          this.modelBadge.className = isCloud ? 'badge badge-primary font-mono' : 'badge badge-neutral font-mono';
-        }
-      });
-    }
 
     window.addEventListener('telemetry-update', (e) => {
       const snap = e.detail;
@@ -183,20 +175,19 @@ class DahooController {
         }
         this.cloudAvailable = data.cloud_available || false;
         if (this.modelBadge) {
-          this.modelBadge.textContent = this.cloudAvailable ? '● Cloud AI Ready' : '● Local AI (Offline)';
+          this.modelBadge.textContent = data.provider_status || (this.cloudAvailable ? '● Gemini 3.8 Flash (Auto)' : '● Local Engine (Offline)');
         }
         if (this.thinkingBadge) {
           const lvl = data.thinking_level || 'medium';
-          this.thinkingBadge.textContent = this.cloudAvailable ? `Gemini 3.8 Flash (${lvl.toUpperCase()})` : 'Offline Rule Engine';
+          this.thinkingBadge.textContent = this.cloudAvailable ? `${data.active_model || 'Gemini 3.8 Flash'} (${lvl.toUpperCase()})` : 'Offline Rule Engine';
         }
-        if (this.cloudToggle) {
-          if (!this.cloudAvailable) {
-            this.cloudToggle.disabled = true;
-            this.cloudToggle.checked = false;
-            this.cloudToggle.title = 'Configure GEMINI_API_KEY in .env to enable Cloud AI';
-          } else {
-            this.cloudToggle.disabled = false;
-          }
+        if (this.providerStatus) {
+          this.providerStatus.innerHTML = this.cloudAvailable 
+            ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span> <span>Auto: ${data.active_model || 'Gemini 3.8 Flash'}</span>`
+            : `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #94A3B8;"></span> <span>Offline: Local Engine</span>`;
+        }
+        if (this.fallbackHint) {
+          this.fallbackHint.textContent = this.cloudAvailable ? 'Auto-failover to Local Engine' : 'Zero API/Network overhead';
         }
       }
     } catch (e) {}
@@ -491,7 +482,6 @@ class DahooController {
     this.showTypingIndicator();
 
     if (this.avatarBtn) this.avatarBtn.classList.add('thinking');
-    const useCloud = this.cloudToggle ? this.cloudToggle.checked : false;
 
     try {
       const res = await fetch('/api/dahoo/chat', {
@@ -499,8 +489,7 @@ class DahooController {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          session_id: this.sessionId,
-          use_cloud: useCloud
+          session_id: this.sessionId
         })
       });
 
@@ -508,9 +497,10 @@ class DahooController {
 
       if (res.ok) {
         const data = await res.json();
+        const totalTok = (data.input_tokens || 0) + (data.output_tokens || 0);
         const metaText = data.engine === 'cloud' 
-          ? `${data.model} (${data.input_tokens + data.output_tokens} tok)`
-          : 'Local Intelligence Engine';
+          ? `${data.model || 'Gemini 3.8 Flash'} (${totalTok} tok)`
+          : 'Dahoo Local Engine';
         this.appendMessage('assistant', data.reply, metaText, data.action);
         this.updateMetrics();
       } else {

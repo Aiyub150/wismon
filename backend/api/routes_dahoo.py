@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/dahoo", tags=["Dahoo"])
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
-    use_cloud: bool = False
+    use_cloud: Optional[bool] = None
     thinking_level: Optional[str] = None
 
 class ActionRequest(BaseModel):
@@ -86,12 +86,15 @@ async def get_dahoo_state():
     elif score < 60:
         proactive = "Kondisi sistem saat ini membutuhkan perhatian."
 
+    is_cloud_active = bool(GEMINI_API_KEY and dahoo_engine._genai_client)
     return {
         "expression": expression,
         "health_score": score,
         "proactive_speech": proactive,
-        "cloud_available": bool(GEMINI_API_KEY),
-        "cloud_model": GEMINI_MODEL if GEMINI_API_KEY else "Not configured (Offline Local Engine Active)",
+        "cloud_available": is_cloud_active,
+        "provider_status": "ONLINE_GEMINI_3_8" if is_cloud_active else "LOCAL_OFFLINE",
+        "active_model": f"Gemini 3.8 Flash ({GEMINI_THINKING_LEVEL.upper()})" if is_cloud_active else "Dahoo Local Engine (Offline)",
+        "cloud_model": GEMINI_MODEL if is_cloud_active else "Local Rule Engine (Offline Active)",
         "thinking_level": GEMINI_THINKING_LEVEL,
         "memory_enabled": DAHOO_MEMORY_ENABLED
     }

@@ -162,7 +162,7 @@ class DatabaseManager:
         """Queue a system_info record for batched writing."""
         async with self._lock:
             self._batch_queue.append(data)
-            if len(self._batch_queue) >= 5:
+            if len(self._batch_queue) >= 10:
                 await self._flush_queue()
 
     async def flush(self):

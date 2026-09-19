@@ -73,7 +73,16 @@ async def mitigate_threat(req: MitigateRequest):
         # 1. High CPU Process Remediation: Pause / Cooldown with multi-tier fallback
         if (category == "High CPU Process" or req.action in ("COOLDOWN_PROCESS", "THROTTLE_PROCESS")) and pid:
             cool_res = await threat_center.throttle_and_cooldown_process(pid, duration=3.5)
-            if cool_res.get("success"):
+            if cool_res.get("is_protected"):
+                await threat_center.update_threat_status(req.threat_id, "PROTECTED_SKIPPED", action=cool_res["message"])
+                return {
+                    "success": False,
+                    "is_protected": True,
+                    "can_fallback": False,
+                    "message": cool_res["message"],
+                    "recommendation": cool_res.get("recommendation", "")
+                }
+            elif cool_res.get("success"):
                 action_log = cool_res["message"]
                 await threat_center.update_threat_status(req.threat_id, "RESOLVED", action=action_log)
                 return {"success": True, "message": cool_res["message"]}

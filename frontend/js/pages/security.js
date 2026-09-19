@@ -120,9 +120,6 @@ class SecurityPage {
                   🛠️ Resolve & Mitigate
                 </button>
               `}
-              <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'RESOLVE')">
-                Resolve
-              </button>
               <button class="btn btn-secondary btn-sm" onclick="app.mitigateThreat('${t.id}', 'FALSE_POSITIVE')">
                 False Positive
               </button>

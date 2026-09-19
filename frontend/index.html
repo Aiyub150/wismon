@@ -1155,12 +1155,12 @@
       </div>
 
       <div class="drawer-input-area">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
-          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
-            <input type="checkbox" id="dahoo-cloud-toggle">
-            <span>Enable Cloud AI (Gemini)</span>
-          </label>
-          <span class="text-muted">Offline by default</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
+          <span id="dahoo-provider-status" class="text-primary font-mono" style="display: flex; align-items: center; gap: 0.35rem;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span>
+            <span>Auto: Gemini 3.8 Flash</span>
+          </span>
+          <span class="text-muted" style="font-size: 0.7rem;" id="dahoo-provider-fallback-hint">Auto-failover to Local Engine</span>
         </div>
         <div class="drawer-input-row">
           <input type="text" id="dahoo-input" class="drawer-input" placeholder="Tanya Dahoo seputar sistem...">

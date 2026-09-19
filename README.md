@@ -808,54 +808,69 @@ Health ↑
 
 ---
 
-# 🤖 Google Gemini / Cloud AI
+# 🤖 Google Gemini / Cloud AI & Dahoo Assistant
 
-Google Gemini bersifat **opsional**.
+WISMON mengintegrasikan **Dahoo Assistant** dengan arsitektur hybrid yang menggabungkan **Gemini 3.8 Flash** dan **Local Intelligence Rule Engine**.
 
-Tanpa API key:
+### Arsitektur AI Hybrid & Automatic Failover
 
-```text
-WISMON
-└── Dahoo
-    └── Local Intelligence Engine
-```
-
-Dengan API key:
+Dahoo beroperasi secara cerdas dengan **Automatic Provider Routing**:
 
 ```text
-WISMON
-└── Dahoo
-    ├── Local Intelligence
-    └── Gemini Cloud AI
+               ┌──────────────────────────────┐
+               │    Dahoo Assistant Query     │
+               └──────────────┬───────────────┘
+                              │
+                  [GEMINI_API_KEY Aktif?]
+                              │
+               ┌──────────────┴──────────────┐
+              YES                            NO
+               │                              │
+    ┌──────────▼──────────┐         ┌─────────▼─────────┐
+    │  Gemini 3.8 Flash   │         │  Local Rule       │
+    │  Cloud AI Engine    │         │  Intelligence     │
+    └──────────┬──────────┘         └───────────────────┘
+               │ (Jaringan Terputus / Quota Limit)
+               │
+               ▼ (Auto Failover)
+    ┌─────────────────────┐
+    │  Local Intelligence │ (Fallback Transparan Tanpa Error)
+    └─────────────────────┘
 ```
+
+- **Online & API Key Valid**: Otomatis menggunakan **Gemini 3.8 Flash** dengan thinking model yang terkalibrasi (`medium`) untuk penalaran mendalam dan diagnosis anomali.
+- **Offline / Quota Habis**: Otomatis beralih ke **Local Rule Engine** tanpa perlu toggle manual. User tetap mendapatkan jawaban cepat seputar CPU, RAM, Disk, dan proses.
+- **Efisiensi Token**: Konteks telemetri dirutekan secara selektif (*Routed Telemetry Context*) sehingga hanya metrik yang relevan dengan pertanyaan user yang dikirim ke model, menghemat token dan biaya tanpa memotong kelengkapan jawaban.
+- **Tone Komunikasi Adaptif**: Dahoo berbicara santai dan ramah (*casual/friendly*) untuk sapaan atau percakapan umum, namun berubah menjadi profesional, lugas, dan terstruktur (*formal/rigorous*) saat menganalisis insiden keamanan atau troubleshooting teknis.
+
+### 🛡️ Safety Guardrails & Integritas Endpoint
+
+Dahoo dirancang dengan sistem keselamatan tingkat tinggi (*human-in-the-loop*):
+
+1. **WISMON Self-Protection**: Server utama WISMON (`python.exe` / current PID) dilindungi secara mutlak. Perintah cooldown/suspend atau terminasi terhadap server WISMON sendiri akan ditolak secara aman untuk mencegah crash dan freeze.
+2. **EDR / Antivirus Protection**: Agen keamanan seperti Bitdefender (`bdservicehost.exe`, `vsserv.exe`), Windows Defender (`msmpeng.exe`), dan sejenisnya tidak dapat ditangguhkan atau dihentikan. Dahoo akan memberikan rekomendasi alternatif untuk memeriksa konsol antivirus langsung.
+3. **Kernel Core Protection**: Proses kernel inti Windows (PID 0, PID 4, `smss.exe`, `csrss.exe`) diblokir dari tindakan modifikasi untuk mencegah kegagalan sistem (BSOD).
+4. **Konfirmasi Pengguna**: Tindakan perbaikan seperti penangguhan proses (*cooldown*) atau terminasi selalu memerlukan persetujuan eksplisit dari pengguna sebelum dieksekusi.
 
 ## Konfigurasi
 
-Masukkan key ke `.env`:
+Tambahkan konfigurasi berikut ke file `.env`:
 
 ```env
-GEMINI_API_KEY=YOUR_API_KEY
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_THINKING_LEVEL=medium
 ```
 
-Gunakan model yang memang tersedia pada layanan/API yang Anda gunakan.
-
-Setelah `.env` diubah, restart WISMON:
-
-```text
-Ctrl+C
-```
-
-kemudian:
+Setelah `.env` diperbarui, restart server WISMON:
 
 ```powershell
 python monitor.py
 ```
 
-### Privasi
+### Privasi Data Telemetri
 
-Pahami data yang dikirim ke layanan cloud sebelum mengaktifkan Cloud AI. Jangan memasukkan data rahasia ke prompt hanya karena fitur AI tersedia.
+Data telemetri hardware Windows diisolasi dan dirutekan secara lokal. Hanya ringkasan metrik mentah yang dikirim ke Gemini API untuk keperluan analisis sesi aktif. Tidak ada data pribadi atau konten file yang diunggah ke cloud.
 
 ---
 

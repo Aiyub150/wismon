@@ -122,8 +122,8 @@ class ProcessCollector(BaseCollector):
         # Sort descending by CPU by default
         processes.sort(key=lambda x: x["cpu_percent"], reverse=True)
 
-        # For the top 10 processes, enrich with handle count and I/O
-        for top_p in processes[:10]:
+        # For the top 5 processes only, enrich with handle count and I/O (optimizes CPU syscalls)
+        for top_p in processes[:5]:
             pr = self._proc_cache.get(top_p["pid"])
             if pr:
                 try:
@@ -147,17 +147,45 @@ class ProcessCollector(BaseCollector):
 
     def terminate_process(self, pid: int) -> Dict[str, Any]:
         """Safely terminates a process after explicit confirmation and safety validation."""
+        import os
+        wismon_pid = os.getpid()
+        if pid == wismon_pid:
+            return {
+                "success": False,
+                "is_protected": True,
+                "message": "Security violation: Server utama WISMON tidak dapat dihentikan oleh aplikasi sendiri demi stabilitas."
+            }
+
         if pid in (0, 4):
-            return {"success": False, "message": "Security violation: Windows Core Kernel process cannot be terminated."}
+            return {
+                "success": False,
+                "is_protected": True,
+                "message": "Security violation: Windows Core Kernel process cannot be terminated."
+            }
         try:
             p = psutil.Process(pid)
             name = p.name()
+            name_lower = name.lower()
             critical_names = {
                 "system", "system idle process", "smss.exe", "csrss.exe", 
-                "wininit.exe", "services.exe", "lsass.exe", "winlogon.exe"
+                "wininit.exe", "services.exe", "lsass.exe", "winlogon.exe", "dwm.exe"
             }
-            if name.lower() in critical_names:
-                return {"success": False, "message": f"Security violation: Critical Windows system process '{name}' cannot be terminated."}
+            security_agents = {
+                "bdservicehost.exe", "vsserv.exe", "bdredline.exe", "epsecurityservice.exe",
+                "msmpeng.exe", "nissrv.exe", "securityhealthservice.exe", "smartscreen.exe"
+            }
+            if name_lower in critical_names:
+                return {
+                    "success": False,
+                    "is_protected": True,
+                    "message": f"Security violation: Critical Windows system process '{name}' cannot be terminated."
+                }
+            if name_lower in security_agents:
+                return {
+                    "success": False,
+                    "is_protected": True,
+                    "message": f"Security violation: Protected Security Agent / EDR '{name}' cannot be terminated."
+                }
 
             p.terminate()
             p.wait(timeout=2)
@@ -171,3 +199,5 @@ class ProcessCollector(BaseCollector):
             return {"success": False, "message": f"Access denied terminating PID {pid}. Administrator rights required."}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+process_collector = ProcessCollector()

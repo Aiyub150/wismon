@@ -9,6 +9,8 @@ import psutil
 from typing import Dict, Any, List
 from backend.collectors.base import BaseCollector
 
+from concurrent.futures import ThreadPoolExecutor
+
 class SocketCollector(BaseCollector):
     def __init__(self, interval: float = 3.0):
         super().__init__(name="socket", interval=interval)
@@ -20,6 +22,7 @@ class SocketCollector(BaseCollector):
         }
         self._dns_pending: set = set()
         self._cache_lock = threading.Lock()
+        self._dns_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="wismon_dns")
         self._pid_name_cache: Dict[int, str] = {}
         self._cleanup_tick: int = 0
 
@@ -44,7 +47,7 @@ class SocketCollector(BaseCollector):
                 return self._dns_cache[ip]
             if ip not in self._dns_pending:
                 self._dns_pending.add(ip)
-                threading.Thread(target=self._async_resolve_dns, args=(ip,), daemon=True).start()
+                self._dns_executor.submit(self._async_resolve_dns, ip)
         return ip  # Immediate non-blocking response
 
     def _resolve_process_name(self, pid: Optional[int]) -> str:

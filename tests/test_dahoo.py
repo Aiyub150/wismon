@@ -102,5 +102,61 @@ class TestDahooEngine(unittest.TestCase):
         recent_after = asyncio.run(db_manager.get_recent_messages(sid))
         self.assertEqual(len(recent_after), 0)
 
+    def test_wismon_self_protection(self):
+        """Verifies that WISMON self-PID (current process) cannot be suspended or terminated."""
+        import os
+        current_pid = os.getpid()
+        
+        # Test Cooldown on self
+        res_cooldown = asyncio.run(dahoo_engine.execute_action("COOLDOWN_PROCESS", {"pid": current_pid}))
+        self.assertFalse(res_cooldown["success"])
+        self.assertTrue(res_cooldown.get("is_protected", False))
+        self.assertIn("WISMON", res_cooldown["message"])
+
+        # Test Terminate on self
+        res_term = asyncio.run(dahoo_engine.execute_action("TERMINATE_PROCESS", {"pid": current_pid}))
+        self.assertFalse(res_term["success"])
+        self.assertTrue(res_term.get("is_protected", False))
+
+    def test_security_agent_and_kernel_protection(self):
+        """Verifies that security agents (Bitdefender/EDR) and Windows kernel processes are protected."""
+        # System PID 4
+        res_kernel = asyncio.run(dahoo_engine.execute_action("COOLDOWN_PROCESS", {"pid": 4}))
+        self.assertFalse(res_kernel["success"])
+        self.assertTrue(res_kernel.get("is_protected", False))
+
+        # Security agent expected name
+        res_edr = asyncio.run(dahoo_engine.execute_action("COOLDOWN_PROCESS", {
+            "pid": 9876,
+            "expected_name": "bdservicehost.exe"
+        }))
+        self.assertFalse(res_edr["success"])
+        self.assertTrue(res_edr.get("is_protected", False))
+        self.assertIn("Agen Keamanan / EDR", res_edr["message"])
+
+    def test_local_engine_protects_wismon_in_recommendations(self):
+        """Verifies that answer_local does not propose cooldown on WISMON's own python process."""
+        import os
+        current_pid = os.getpid()
+        dummy_telemetry = {
+            "health": {"score": 60},
+            "cpu": {"total_percent": 85.0},
+            "memory": {"percent": 70.0, "used_bytes": 8 * 1024**3, "total_bytes": 16 * 1024**3},
+            "storage": {"overall": {"percent": 50.0, "free_bytes": 50 * 1024**3}},
+            "network": {"throughput": {"bytes_recv_sec": 1000, "bytes_sent_sec": 1000}, "interfaces": []},
+            "threats": [],
+            "process": {"top_cpu": [{"pid": current_pid, "name": "python.exe", "cpu_percent": 82.0}]},
+            "hardware": {"thermal": {"cpu_temp_c": 60}}
+        }
+        reply, action = asyncio.run(dahoo_engine.answer_local("kenapa laptop saya lemot?", dummy_telemetry, session_id="test_self_rec"))
+        self.assertIn("WISMON", reply)
+        self.assertIsNone(action, "Should not propose cooldown action for WISMON process")
+
+    def test_automatic_provider_routing(self):
+        """Verifies chat with use_cloud=None routes automatically without crashing."""
+        reply_dict = asyncio.run(dahoo_engine.chat("Berapa CPU saya?", telemetry={}, session_id="test_auto_routing", use_cloud=None))
+        self.assertIn("reply", reply_dict)
+        self.assertIn(reply_dict.get("engine"), ["cloud", "local", "local-fallback"])
+
 if __name__ == "__main__":
     unittest.main()
