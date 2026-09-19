@@ -1113,12 +1113,21 @@
             <div class="text-muted font-mono" style="font-size: 0.7rem;" id="dahoo-model-badge">Local Rule Engine</div>
           </div>
         </div>
-        <button class="modal-close-btn" id="close-dahoo-btn">✕</button>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn btn-secondary btn-sm" id="new-dahoo-session-btn" title="Mulai sesi percakapan baru" style="padding: 3px 8px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px;">
+            <span>🔄</span> <span>Sesi Baru</span>
+          </button>
+          <button class="modal-close-btn" id="close-dahoo-btn">✕</button>
+        </div>
       </div>
 
-      <!-- Cost & Token Transparency Card (Section 28) -->
+      <!-- Cost, Token & Model Transparency Card -->
       <div style="padding: 0.75rem 1.25rem 0 1.25rem;">
         <div class="card" style="padding: 0.75rem; background: var(--bg-body); font-size: 0.75rem; margin-bottom: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+            <span class="text-muted">Model & Thinking:</span>
+            <strong class="text-primary font-mono" id="dahoo-thinking-badge">Gemini 3.8 Flash (Med)</strong>
+          </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
             <span class="text-muted">Estimated AI Cost:</span>
             <strong class="text-success font-mono" id="dahoo-cost-badge">$0.00000</strong>

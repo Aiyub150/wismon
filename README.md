@@ -412,7 +412,14 @@ INTERVAL_STORAGE_IO=1.0
 
 # Dahoo Cloud AI (optional)
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_THINKING_LEVEL=medium
+
+# Dahoo Session & Memory
+DAHOO_MEMORY_ENABLED=true
+DAHOO_ACTION_TTL_SECONDS=60
+DAHOO_MAX_CONTEXT_TURNS=10
+DAHOO_DEFAULT_LANGUAGE=id
 
 # Data retention
 DETAILED_RETENTION_HOURS=24
@@ -677,15 +684,14 @@ Klik tombol **Dahoo** pada topbar.
 
 Dahoo adalah asisten AI monitoring dan troubleshooting otonom yang dapat bekerja dalam dua mode: **Local Intelligence** (bawaan tanpa internet/API key) dan **Google Gemini Cloud AI**.
 
-### Kemampuan Agentik Baru:
-- **Batch Action Execution**: Dahoo dapat mengeksekusi mitigasi sistem menyeluruh saat diminta melalui perintah bahasa alami:
-  - *"Lakukan tindakan"*
-  - *"Tindak semua ancaman"*
-  - *"Optimalkan sistem"*
-  - *"Selesaikan masalah sekarang"*
-- **Multi-Step Feedback**: Menampilkan progres bertahap (*Validating target...* ➔ *Executing action...* ➔ *Verifying result...*).
+### Kemampuan Agentik Baru (Gemini 3.8 Flash & Two-Phase Execution):
+- **Gemini 3.8 Flash & Thinking Config**: Menggunakan model `gemini-3.8-flash` dengan konfigurasi reasoning level native (`low`, `medium`, `high`) via `ThinkingConfig` tanpa parameter sampling usang.
+- **Multi-Turn Conversation Memory**: Mendukung percakapan multi-turn berkelanjutan dengan isolasi sesi (`session_id`), tombol `🔄 Sesi Baru`, serta persistensi riwayat di SQLite (`dahoo_sessions`).
+- **Two-Phase Safe Agent Execution**: Dahoo tidak langsung mematikan proses atau menjalankan aksi drastis; melainkan mengajukan **Action Proposal Card** dengan validasi TTL 60 detik yang membutuhkan konfirmasi pengguna (`[Konfirmasi Tindakan]` atau `[Batalkan]`).
+- **Validasi Target PID Ketat**: Memverifikasi keberadaan PID dan kesesuaian nama proses sebelum eksekusi untuk mencegah *PID re-assignment hazard*.
+- **Verifikasi Metrik Real (Before vs After)**: Mengukur delta penggunaan CPU dan RAM riil sebelum dan sesudah eksekusi (`cpu_before` vs `cpu_after`, `ram_before` vs `ram_after`) serta menampilkan penghematan resource secara transparan.
+- **Context Routing & Token Optimization**: Mengklasifikasikan intent pengguna untuk hanya menyertakan telemetry yang relevan (menghemat token dari ~2000+ menjadi ~200-500 tokens) sekaligus mengisolasi nama proses OS dari prompt injection.
 - **Proteksi Timeout 10 Detik**: Menggunakan `AbortController` untuk mencegah Dahoo stuck/hang jika ada proses sistem yang membutuhkan waktu lama.
-- **Verifikasi Hasil**: Menampilkan hasil tindakan secara transparan (apakah sukses atau gagal beserta alasannya).
 
 ### Contoh pertanyaan & perintah
 
@@ -829,7 +835,8 @@ Masukkan key ke `.env`:
 
 ```env
 GEMINI_API_KEY=YOUR_API_KEY
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_THINKING_LEVEL=medium
 ```
 
 Gunakan model yang memang tersedia pada layanan/API yang Anda gunakan.

@@ -28,9 +28,16 @@ def get_pid_using_port(port: int):
         pass
     return None
 
+import argparse
+
 def main():
-    host = HOST
-    port = PORT
+    parser = argparse.ArgumentParser(description="Windows System Monitoring")
+    parser.add_argument("--host", type=str, default=HOST, help="Host to bind the server to")
+    parser.add_argument("--port", type=int, default=PORT, help="Port to bind the server to")
+    args = parser.parse_args()
+
+    host = args.host
+    port = args.port
 
     # Pre-flight check: Verify if the port is already occupied
     if is_port_in_use(host, port):

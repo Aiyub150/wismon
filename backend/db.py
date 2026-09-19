@@ -102,8 +102,16 @@ CREATE TABLE IF NOT EXISTS threat (
 CREATE INDEX IF NOT EXISTS idx_threat_status ON threat(status);
 CREATE INDEX IF NOT EXISTS idx_threat_timestamp ON threat(timestamp);
 
+CREATE TABLE IF NOT EXISTS dahoo_sessions (
+    session_id TEXT PRIMARY KEY,
+    title TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS dahoo_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT DEFAULT 'default',
     timestamp REAL NOT NULL,
     role TEXT NOT NULL,
     message TEXT NOT NULL,
@@ -112,6 +120,8 @@ CREATE TABLE IF NOT EXISTS dahoo_messages (
     output_tokens INTEGER DEFAULT 0,
     estimated_cost REAL DEFAULT 0.0
 );
+
+CREATE INDEX IF NOT EXISTS idx_dahoo_timestamp ON dahoo_messages(timestamp);
 
 CREATE TABLE IF NOT EXISTS system_baseline (
     metric TEXT PRIMARY KEY,
@@ -131,12 +141,19 @@ class DatabaseManager:
         self._lock = asyncio.Lock()
 
     async def initialize(self):
-        """Initialize database tables and indexes."""
+        """Initialize database tables, indexes, and run migrations."""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.executescript(SCHEMA_SQL)
+                # Check for session_id column migration in dahoo_messages
+                async with db.execute("PRAGMA table_info(dahoo_messages)") as cursor:
+                    columns = [row[1] for row in await cursor.fetchall()]
+                    if "session_id" not in columns:
+                        await db.execute("ALTER TABLE dahoo_messages ADD COLUMN session_id TEXT DEFAULT 'default'")
+                # Safely create index on session_id now that column is guaranteed
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_dahoo_session ON dahoo_messages(session_id)")
                 await db.commit()
-            logger.info("Database initialized successfully with WAL mode.")
+            logger.info("Database initialized successfully with WAL mode and session schema.")
         except Exception as e:
             logger.error(f"Database initialization error: {e}", exc_info=True)
             raise
@@ -264,16 +281,83 @@ class DatabaseManager:
             logger.error(f"Error fetching threats: {e}")
             return []
 
-    async def save_dahoo_message(self, role: str, message: str, model: str = "", in_tokens: int = 0, out_tokens: int = 0, cost: float = 0.0):
-        """Save a Dahoo conversation message and token usage."""
+    async def create_or_get_session(self, session_id: Optional[str] = None, title: Optional[str] = None) -> str:
+        """Ensure a session exists or create a new one."""
+        import uuid
+        now = time.time()
+        sid = (session_id or "").strip() or f"sess_{uuid.uuid4().hex[:10]}"
+        t = title or "Percakapan Baru"
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     """
-                    INSERT INTO dahoo_messages (timestamp, role, message, model, input_tokens, output_tokens, estimated_cost)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO dahoo_sessions (session_id, title, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
                     """,
-                    (time.time(), role, message, model, in_tokens, out_tokens, cost)
+                    (sid, t, now, now)
+                )
+                await db.commit()
+            return sid
+        except Exception as e:
+            logger.error(f"Error creating/getting session {sid}: {e}")
+            return sid
+
+    async def get_recent_messages(self, session_id: str = "default", limit: int = 10) -> List[Dict[str, Any]]:
+        """Fetch recent conversation messages for a session (for multi-turn context)."""
+        sid = (session_id or "default").strip()
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute(
+                    """
+                    SELECT role, message, timestamp, model
+                    FROM dahoo_messages
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (sid, limit)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    # Return in chronological order
+                    return [dict(r) for r in reversed(rows)]
+        except Exception as e:
+            logger.error(f"Error fetching recent messages for session {sid}: {e}")
+            return []
+
+    async def clear_session_messages(self, session_id: str):
+        """Clear all messages belonging to a session."""
+        sid = (session_id or "default").strip()
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute("DELETE FROM dahoo_messages WHERE session_id = ?", (sid,))
+                await db.execute("DELETE FROM dahoo_sessions WHERE session_id = ?", (sid,))
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Error clearing session {sid}: {e}")
+
+    async def save_dahoo_message(self, role: str, message: str, session_id: str = "default", model: str = "", in_tokens: int = 0, out_tokens: int = 0, cost: float = 0.0):
+        """Save a Dahoo conversation message with session_id and token usage."""
+        sid = (session_id or "default").strip()
+        now = time.time()
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO dahoo_messages (session_id, timestamp, role, message, model, input_tokens, output_tokens, estimated_cost)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (sid, now, role, message, model, in_tokens, out_tokens, cost)
+                )
+                # Update session timestamp
+                await db.execute(
+                    """
+                    INSERT INTO dahoo_sessions (session_id, title, created_at, updated_at)
+                    VALUES (?, 'Percakapan', ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
+                    """,
+                    (sid, now, now)
                 )
                 await db.commit()
         except Exception as e:
