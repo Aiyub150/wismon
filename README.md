@@ -48,7 +48,7 @@ Fitur utamanya meliputi:
 - **Safe Review & Recycle Bin**: Pembersihan aman file dan folder dengan memindahkannya ke Windows Recycle Bin (dilengkapi OS guardrails yang melindungi `C:\Windows`, `Program Files`, dan sistem penting).
 - **Socket Explorer dengan Prioritas Internet**: Menyorot koneksi internet eksternal aktif (seperti TikTok, streaming, remote IP) di baris teratas, dilengkapi filter instan (`🌐 Internet Saja`, `Semua`, `ESTABLISHED`, `LISTENING`) dan search bar domain/IP.
 - **Batch Threat Mitigation**: Menindak seluruh anomali keamanan secara simultan via tombol *Tindak Semua* atau perintah asisten, dengan pelaporan status jujur (`MITIGATED`, `PROTECTED_SKIPPED`, atau `ACTION_FAILED`).
-- **Agentic Dahoo Assistant (Gemini 3.6 Flash & Auto-Failover)**: Mampu merutekan otomatis ke Gemini 3.6 Flash saat online dan failover transparan ke Local Engine saat offline, mengeksekusi mitigasi sistem secara langsung dari chat dengan validasi 2 fase dan verifikasi status real-time.
+- **Agentic Dahoo Assistant (Gemini 3.5 Flash & Auto-Failover)**: Mampu merutekan otomatis ke Gemini 3.5 Flash saat online dan failover transparan ke Local Engine saat offline, mengeksekusi mitigasi sistem secara langsung dari chat dengan validasi 2 fase dan verifikasi status real-time.
 - CPU usage dan telemetry per-core.
 - RAM dan statistik memory kernel tingkat lanjut (Paged/Non-paged pool, Commit Charge).
 - GPU dan hardware telemetry.
@@ -413,7 +413,7 @@ INTERVAL_STORAGE_IO=1.0
 
 # Dahoo Cloud AI (optional)
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-3.5-flash
 GEMINI_THINKING_LEVEL=medium
 
 # Dahoo Session & Memory
@@ -685,8 +685,8 @@ Klik tombol **Dahoo** pada topbar.
 
 Dahoo adalah asisten AI monitoring dan troubleshooting otonom yang dapat bekerja dalam dua mode: **Local Intelligence** (bawaan tanpa internet/API key) dan **Google Gemini Cloud AI**.
 
-### Kemampuan Agentik Baru (Gemini 3.6 Flash & Two-Phase Execution):
-- **Gemini 3.6 Flash & Thinking Config**: Menggunakan model `gemini-3.6-flash` dengan konfigurasi reasoning level native (`low`, `medium`, `high`) via `ThinkingConfig` tanpa parameter sampling usang.
+### Kemampuan Agentik Baru (Gemini 3.5 Flash & Two-Phase Execution):
+- **Gemini 3.5 Flash & Thinking Config**: Menggunakan model resmi `gemini-3.5-flash` dengan konfigurasi reasoning level native (`low`, `medium`, `high`) via `ThinkingConfig` tanpa parameter sampling usang. Model ini dipilih secara eksklusif karena kestabilan tinggi, kecepatan inferensi, dan efisiensi resource.
 - **Multi-Turn Conversation Memory**: Mendukung percakapan multi-turn berkelanjutan dengan isolasi sesi (`session_id`), tombol `🔄 Sesi Baru`, serta persistensi riwayat di SQLite (`dahoo_sessions`).
 - **Two-Phase Safe Agent Execution**: Dahoo tidak langsung mematikan proses atau menjalankan aksi drastis; melainkan mengajukan **Action Proposal Card** dengan validasi TTL 60 detik yang membutuhkan konfirmasi pengguna (`[Konfirmasi Tindakan]` atau `[Batalkan]`).
 - **Validasi Target PID Ketat**: Memverifikasi keberadaan PID dan kesesuaian nama proses sebelum eksekusi untuk mencegah *PID re-assignment hazard*.
@@ -809,50 +809,142 @@ Health ↑
 
 ---
 
-# 🤖 Google Gemini / Cloud AI & Dahoo Assistant
+# 🤖 Google Gemini / Cloud AI & Cara Kerja Dahoo Assistant
 
-WISMON mengintegrasikan **Dahoo Assistant** dengan arsitektur hybrid yang menggabungkan **Gemini 3.6 Flash** (model standar stabil Google AI Studio) dan **Local Intelligence Rule Engine**.
+WISMON mengintegrasikan **Dahoo Assistant** dengan arsitektur hybrid yang menggabungkan model cloud **Google Gemini 3.5 Flash** (`gemini-3.5-flash`) dan **Dahoo Local Intelligence Rule Engine**.
 
-### Arsitektur AI Hybrid & Automatic Failover
+---
 
-Dahoo beroperasi secara cerdas dengan **Automatic Provider Routing**:
+### 📌 Model Versi yang Digunakan: Gemini 3.5 Flash (`gemini-3.5-flash`)
+
+WISMON secara eksklusif dan tunggal menggunakan **`gemini-3.5-flash`** sebagai model AI berbasis cloud. 
+
+#### Mengapa Hanya `gemini-3.5-flash`?
+1. **Ketersediaan & Kestabilan Tinggi**: Model `gemini-3.5-flash` merupakan model resmi Google Gemini yang tersedia luas pada akun Google AI Studio tanpa kendala kuota khusus atau pembatasan tier tertentu. Model eksperimental seperti 3.8 kerap mengalami lonjakan beban (*503 Service Unavailable*), sedangkan model usang (seperti 2.5) sudah didepresiasi oleh Google.
+2. **Latensi Sangat Rendah & Respon Cepat**: Sebagai model kelas "Flash", inferensi berlangsung dalam hitungan detik, sangat cocok untuk asisten pemantauan sistem yang membutuhkan respon cepat saat terjadi insiden performa.
+3. **Dukungan Native Reasoning (`ThinkingConfig`)**: Menggunakan parameter reasoning bawaan Google SDK (`google-genai`) dengan level `low`, `medium` (default), dan `high` tanpa parameter sampling usang (`temperature`, `top_p`, `top_k`).
+4. **Efisiensi & Transparansi Biaya Token**: Penghitungan token selaras dengan Google AI Studio, di mana *thinking tokens* dilaporkan secara transparan bersama *prompt tokens* dan *candidates tokens*, memberikan estimasi biaya yang presisi pada badge UI Dahoo.
+
+---
+
+### ⚙️ Cara Kerja Dahoo (End-to-End Pipeline)
+
+Dahoo bekerja melalui pipeline 7 tahap terintegrasi yang menjamin keamanan sistem Windows, efisiensi bandwidth, dan keakuratan analisis:
 
 ```text
-               ┌──────────────────────────────┐
-               │    Dahoo Assistant Query     │
-               └──────────────┬───────────────┘
-                              │
-                  [GEMINI_API_KEY Aktif?]
-                              │
-               ┌──────────────┴──────────────┐
-              YES                            NO
-               │                              │
-    ┌──────────▼──────────┐         ┌─────────▼─────────┐
-    │  Gemini 3.6 Flash   │         │  Local Rule       │
-    │  Cloud AI Engine    │         │  Intelligence     │
-    └──────────┬──────────┘         └───────────────────┘
-               │ (503 / Jaringan Terputus / Quota Limit)
-               │
-               ▼ (Auto Failover Chain: 3.6 → 3.7 → 3.5 → Local)
-    ┌─────────────────────┐
-    │  Local Intelligence │ (Fallback Transparan Tanpa Error)
-    └─────────────────────┘
+               ┌─────────────────────────────────────────────────────────┐
+               │                Input Pengguna (Chat/Perintah)           │
+               └────────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+               ┌─────────────────────────────────────────────────────────┐
+               │ 1. Intent Classification & Context Routing              │
+               │    (CPU / RAM / Disk / Security / Network / General)    │
+               └────────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+               ┌─────────────────────────────────────────────────────────┐
+               │ 2. Telemetry Sanitization & Prompt Injection Shield     │
+               │    (Hanya metrik relevan yang disisipkan; teks OS aman) │
+               └────────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+                               [GEMINI_API_KEY Aktif & Online?]
+                                            │
+                             ┌──────────────┴──────────────┐
+                            YES                            NO
+                             │                              │
+                  ┌──────────▼──────────┐        ┌──────────▼──────────┐
+                  │ 3. Gemini 3.5 Flash │        │ 3. Dahoo Local Rule │
+                  │    Cloud AI Engine  │        │    Intelligence     │
+                  └──────────┬──────────┘        └──────────┬──────────┘
+                             │ (Gagal / 503 / Offline)      │
+                             └──────────────┬───────────────┘
+                                            │ (Fallback Transparan)
+                                            ▼
+               ┌─────────────────────────────────────────────────────────┐
+               │ 4. Multi-Turn Session Memory (SQLite Persistence)       │
+               │    (Menyimpan riwayat percakapan per session_id)        │
+               └────────────────────────────┬────────────────────────────┘
+                                            │
+                                            ▼
+                               [Apakah Ada Aksi Remediasi?]
+                                            │
+                             ┌──────────────┴──────────────┐
+                            YES                            NO
+                             │                              │
+                  ┌──────────▼──────────┐                   │
+                  │ 5. Two-Phase Safe   │                   │
+                  │    Action Proposal  │                   │
+                  │    (TTL 60 Detik)   │                   │
+                  └──────────┬──────────┘                   │
+                             │                              │
+                  [Konfirmasi Pengguna?]                    │
+                             │                              │
+                   ┌─────────┴─────────┐                    │
+                  YES                 NO/Timeout            │
+                   │                   │                    │
+        ┌──────────▼──────────┐   ┌────▼───────────────┐    │
+        │ 6. Strict Guardrail │   │ Aksi Dibatalkan /  │    │
+        │    Check & Eksekusi │   │ Proposal Expired   │    │
+        └──────────┬──────────┘   └────────────────────┘    │
+                   │                                        │
+                   ▼                                        │
+        ┌─────────────────────┐                             │
+        │ 7. Real-Time Metric │                             │
+        │    Verification     │                             │
+        │    (Before vs After)│                             │
+        └──────────┬──────────┘                             │
+                   │                                        │
+                   └───────────────────┬────────────────────┘
+                                       │
+                                       ▼
+               ┌─────────────────────────────────────────────────────────┐
+               │         Output Jawaban & Laporan Status ke UI           │
+               └─────────────────────────────────────────────────────────┘
 ```
 
-- **Online & API Key Valid**: Otomatis menggunakan **Gemini 3.6 Flash** dengan thinking model yang terkalibrasi (`medium`) untuk penalaran mendalam dan diagnosis anomali.
-- **Rantai Fallback Otomatis**: Jika model utama mengalami lonjakan beban (*503 UNAVAILABLE*), sistem otomatis mencoba model stabil berikutnya (`gemini-3.7-flash` / `gemini-3.5-flash`) sebelum beralih ke Local Engine, menjamin asisten tidak pernah gagal menjawab.
-- **Offline / Quota Habis**: Otomatis beralih ke **Local Rule Engine** tanpa perlu toggle manual. User tetap mendapatkan jawaban cepat seputar CPU, RAM, Disk, dan proses.
-- **Efisiensi & Akurasi Token**: Konteks telemetri dirutekan secara selektif (*Routed Telemetry Context*). Penghitungan token selaras dengan Google AI Studio (mencakup *thinking tokens* dalam *output tokens*).
-- **Tone Komunikasi Adaptif**: Dahoo berbicara santai dan ramah (*casual/friendly*) untuk sapaan atau percakapan umum, namun berubah menjadi profesional, lugas, dan terstruktur (*formal/rigorous*) saat menganalisis insiden keamanan atau troubleshooting teknis.
+#### 1. Klasifikasi Intent & Routing Konteks Telemetri (*Context Routing*)
+Alih-alih membuang seluruh snapshot sistem (ribuan baris data proses, soket, layanan) ke dalam prompt yang menghabiskan 2.000–4.000+ token, Dahoo menganalisis intent pertanyaan terlebih dahulu:
+- **CPU Intent**: Menyertakan ringkasan beban CPU, core count, dan Top 5 proses CPU tertinggi.
+- **Memory Intent**: Menyertakan RAM total, terpakai, paged/non-paged pool, commit charge, dan Top 5 proses RAM terbesar.
+- **Disk / Storage Intent**: Menyertakan status partisi drive, folder sampah cache, dan file besar.
+- **Security Intent**: Menyertakan daftar anomali keamanan aktif dan proses yang memicu peringatan.
+- **General Chat**: Hanya menyertakan status kesehatan umum sistem (*Health Score*), menghemat kuota token hingga 85% (hanya ~200–500 token).
 
-### 🛡️ Safety Guardrails & Integritas Endpoint
+#### 2. Sanitasi Telemetri & Perlindungan Prompt Injection
+Data dari sistem operasi (seperti nama proses atau judul jendela) dapat berpotensi mengandung karakter berbahaya atau instruksi tersembunyi (*prompt injection*). Dahoo menyaring dan men-sanitasi seluruh string telemetri sebelum digabungkan ke system prompt.
 
-Dahoo dirancang dengan sistem keselamatan tingkat tinggi (*human-in-the-loop*):
+#### 3. Arsitektur Hybrid & Failover Otomatis (Cloud + Local)
+- **Mode Cloud (Gemini 3.5 Flash)**: Menggunakan SDK resmi Google GenAI (`google-genai`) dengan model `gemini-3.5-flash` dan `ThinkingConfig(thinking_level="medium")`. Otomatis menonaktifkan Automatic Function Calling (AFC) legacy untuk memastikan komunikasi stabil dan bebas dari peringatan deprecated.
+- **Mode Local Intelligence (Offline Rule Engine)**: Jika API key belum dikonfigurasi, kuota habis, atau koneksi internet terputus, sistem secara instan dan mulus melakukan failover ke Local Rule Engine. Local Engine menganalisis metrik sistem menggunakan aturan heuristik bawaan tanpa jeda dan tanpa menampilkan pesan error ke pengguna.
 
-1. **WISMON Self-Protection**: Server utama WISMON (`python.exe` / current PID) dilindungi secara mutlak. Perintah cooldown/suspend atau terminasi terhadap server WISMON sendiri akan ditolak secara aman untuk mencegah crash dan freeze.
-2. **EDR / Antivirus Protection**: Agen keamanan seperti Bitdefender (`bdservicehost.exe`, `vsserv.exe`), Windows Defender (`msmpeng.exe`), dan sejenisnya tidak dapat ditangguhkan atau dihentikan. Dahoo akan memberikan rekomendasi alternatif untuk memeriksa konsol antivirus langsung.
-3. **Kernel Core Protection**: Proses kernel inti Windows (PID 0, PID 4, `smss.exe`, `csrss.exe`) diblokir dari tindakan modifikasi untuk mencegah kegagalan sistem (BSOD).
-4. **Konfirmasi Pengguna**: Tindakan perbaikan seperti penangguhan proses (*cooldown*) atau terminasi selalu memerlukan persetujuan eksplisit dari pengguna sebelum dieksekusi.
+#### 4. Memori Percakapan Multi-Turn (*Conversational Memory*)
+Dahoo dilengkapi dengan manajemen sesi percakapan:
+- Setiap tab atau pengguna diberikan `session_id` unik yang disimpan di `localStorage` browser.
+- Riwayat percakapan disimpan secara persisten di database SQLite lokal (`dahoo_sessions` dan `dahoo_messages`).
+- Konteks percakapan sebelumnya diumpankan kembali ke prompt (hingga 10 turn terakhir) sehingga pengguna dapat mengajukan pertanyaan lanjutan (contoh: *"Berapa RAM-nya?"* lalu dilanjutkan *"Proses mana yang paling banyak memakannya?"*).
+- Pengguna dapat mereset konteks kapan saja melalui tombol **`🔄 Sesi Baru`**.
+
+#### 5. Two-Phase Safe Agent Execution (*Human-in-the-Loop*)
+Dahoo tidak pernah mematikan proses, menangguhkan layanan, atau membersihkan disk secara sepihak tanpa izin:
+- **Fase 1 (Proposal)**: Jika Dahoo merekomendasikan tindakan mitigasi, Dahoo memancarkan objek `Action Proposal` terstruktur dengan batas waktu kedaluwarsa (**TTL 60 detik**). Di UI chat, muncul kartu interaktif dengan tombol **`[Konfirmasi Tindakan]`** dan **`[Batalkan]`**.
+- **Fase 2 (Konfirmasi & Eksekusi)**: Tindakan hanya dijalankan jika pengguna secara sadar mengklik tombol konfirmasi sebelum batas waktu 60 detik habis. Token sekali pakai (*nonce-based token*) mencegah eksekusi ganda atau replay attack.
+
+#### 6. Strict Guardrails & Perlindungan Endpoint Mutlak
+Sebelum aksi apapun dieksekusi oleh backend, permintaan melewati lapisan pengaman wajib:
+- **WISMON Self-Protection**: Server backend WISMON (`python.exe` / current PID) dilindungi secara mutlak dari operasi `kill`, `suspend`, atau `cooldown` untuk mencegah server mati atau UI membeku.
+- **EDR & Antivirus Protection**: Agen keamanan seperti Bitdefender (`bdservicehost.exe`, `vsserv.exe`), Windows Defender (`msmpeng.exe`), dan produk keamanan lainnya diblokir dari terminasi demi menjaga integritas komputer.
+- **Windows Kernel Protection**: Proses sistem inti (PID 0, PID 4 `System`, `smss.exe`, `csrss.exe`, dll.) diblokir dari intervensi agar tidak menyebabkan Blue Screen of Death (BSOD).
+- **Validasi PID Ulang (*Re-assignment Protection*)**: Memverifikasi bahwa PID target masih memiliki nama proses dan waktu pembuatan (*create_time*) yang sama dengan saat proposal dibuat, mencegah terminasi proses baru yang kebetulan menggunakan PID daur ulang.
+
+#### 7. Verifikasi Metrik Real-Time (Before vs After)
+Setelah mitigasi selesai:
+- Dahoo secara otomatis membaca kembali telemetri sistem secara riil.
+- Menghitung delta perubahan performa (`cpu_before` vs `cpu_after`, `ram_before` vs `ram_after`).
+- Melaporkan hasil konkret kepada pengguna, misalnya: *"Berhasil mengoptimalkan proses. Penggunaan RAM turun 450 MB dan CPU kembali normal di 12%."*
+
+---
 
 ## Konfigurasi
 
@@ -1068,7 +1160,7 @@ Periksa `.env`:
 
 ```env
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
 Kemudian restart:
@@ -1248,8 +1340,8 @@ Frontend menggunakan HTML/CSS/Vanilla JavaScript dan disajikan oleh backend. Fil
 
 ```text
 [ ] GEMINI_API_KEY terisi
-[ ] GEMINI_MODEL terisi (default: gemini-3.6-flash)
-[ ] Automatic Provider Routing aktif (● Gemini 3.6 Flash (Auto))
+[ ] GEMINI_MODEL terisi (default: gemini-3.5-flash)
+[ ] Automatic Provider Routing aktif (● Gemini 3.5 Flash (Auto))
 ```
 
 ---

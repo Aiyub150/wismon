@@ -2,7 +2,7 @@
  * Dahoo Assistant UI Controller.
  * Features an interactive Wolf Mascot with dynamic facial expressions,
  * session-aware conversational memory, WhatsApp-style bubbles, XSS protection,
- * and transparent AI mode routing (Gemini 3.6 Flash & Local Engine).
+ * and transparent AI mode routing (Gemini 3.5 Flash & Local Engine).
  */
 
 function escapeHtml(str) {
@@ -174,7 +174,7 @@ class DahooController {
           this.speechBubble.textContent = data.proactive_speech;
         }
         this.cloudAvailable = data.cloud_available || false;
-        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.6 Flash' : 'Offline Rule Engine');
+        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.5 Flash' : 'Offline Rule Engine');
         // Clean any existing parenthesized suffix like (MEDIUM) to avoid duplicate (MEDIUM) (MEDIUM)
         const cleanModel = rawModel.replace(/\s*\([A-Za-z0-9_-]+\)\s*$/, '').trim();
 
@@ -503,7 +503,7 @@ class DahooController {
         const data = await res.json();
         const totalTok = (data.input_tokens || 0) + (data.output_tokens || 0);
         const metaText = data.engine === 'cloud' 
-          ? `${data.model || 'Gemini 3.6 Flash'} (${totalTok} tok)`
+          ? `${data.model || 'Gemini 3.5 Flash'} (${totalTok} tok)`
           : 'Dahoo Local Engine';
         this.appendMessage('assistant', data.reply, metaText, data.action);
         this.updateMetrics();
