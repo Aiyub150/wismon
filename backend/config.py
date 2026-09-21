@@ -34,13 +34,15 @@ RING_BUFFER_SIZE = 300  # 300 samples in RAM for zero-latency charts & SSE
 
 # Dahoo AI Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "medium").lower()
+DAHOO_MAX_OUTPUT_TOKENS = int(os.getenv("DAHOO_MAX_OUTPUT_TOKENS", "2048"))
 
 # Dahoo Assistant & Session Memory Settings
 DAHOO_MEMORY_ENABLED = os.getenv("DAHOO_MEMORY_ENABLED", "true").lower() == "true"
 DAHOO_ACTION_TTL_SECONDS = int(os.getenv("DAHOO_ACTION_TTL_SECONDS", "60"))
 DAHOO_MAX_CONTEXT_TURNS = int(os.getenv("DAHOO_MAX_CONTEXT_TURNS", "10"))
+DAHOO_MAX_CONTEXT_TOKENS = int(os.getenv("DAHOO_MAX_CONTEXT_TOKENS", "1048576"))
 DAHOO_DEFAULT_LANGUAGE = os.getenv("DAHOO_DEFAULT_LANGUAGE", "id")
 
 # Gemini pricing estimates (USD per 1M tokens) - Google AI Studio standard rates

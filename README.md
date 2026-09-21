@@ -48,7 +48,9 @@ Fitur utamanya meliputi:
 - **Safe Review & Recycle Bin**: Pembersihan aman file dan folder dengan memindahkannya ke Windows Recycle Bin (dilengkapi OS guardrails yang melindungi `C:\Windows`, `Program Files`, dan sistem penting).
 - **Socket Explorer dengan Prioritas Internet**: Menyorot koneksi internet eksternal aktif (seperti TikTok, streaming, remote IP) di baris teratas, dilengkapi filter instan (`🌐 Internet Saja`, `Semua`, `ESTABLISHED`, `LISTENING`) dan search bar domain/IP.
 - **Batch Threat Mitigation**: Menindak seluruh anomali keamanan secara simultan via tombol *Tindak Semua* atau perintah asisten, dengan pelaporan status jujur (`MITIGATED`, `PROTECTED_SKIPPED`, atau `ACTION_FAILED`).
-- **Agentic Dahoo Assistant (Gemini 3.5 Flash & Auto-Failover)**: Mampu merutekan otomatis ke Gemini 3.5 Flash saat online dan failover transparan ke Local Engine saat offline, mengeksekusi mitigasi sistem secara langsung dari chat dengan validasi 2 fase dan verifikasi status real-time.
+- **Agentic Dahoo Assistant (Gemini 3.8 Flash Streaming & Auto-Failover)**: Mampu melakukan streaming end-to-end (SSE) tanpa respons terpotong ke Gemini 3.8 Flash saat online dan failover transparan ke Local Engine saat offline, mengeksekusi mitigasi sistem secara langsung dari chat dengan validasi 2 fase dan verifikasi status real-time.
+- **Universal CPU & Memory Optimizer**: Tombol one-click *⚡ Optimalkan CPU* (meredam proses terberat non-sistem) pada halaman CPU dan *⚡ Optimalkan Memori* (membersihkan cache working set RAM via Win32 `EmptyWorkingSet`) pada halaman Memory.
+- **Decoupled Telemetry & Batch Persistence**: Siklus telemetri real-time 1.0s murni berjalan di RAM (<15ms), sementara penulisan riwayat ke SQLite ditangani oleh background worker setiap 5 detik, mencegah disk lock dan lonjakan I/O.
 - CPU usage dan telemetry per-core.
 - RAM dan statistik memory kernel tingkat lanjut (Paged/Non-paged pool, Commit Charge).
 - GPU dan hardware telemetry.
@@ -413,8 +415,9 @@ INTERVAL_STORAGE_IO=1.0
 
 # Dahoo Cloud AI (optional)
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 GEMINI_THINKING_LEVEL=medium
+DAHOO_MAX_OUTPUT_TOKENS=2048
 
 # Dahoo Session & Memory
 DAHOO_MEMORY_ENABLED=true
@@ -811,19 +814,21 @@ Health ↑
 
 # 🤖 Google Gemini / Cloud AI & Cara Kerja Dahoo Assistant
 
-WISMON mengintegrasikan **Dahoo Assistant** dengan arsitektur hybrid yang menggabungkan model cloud **Google Gemini 3.5 Flash** (`gemini-3.5-flash`) dan **Dahoo Local Intelligence Rule Engine**.
+WISMON mengintegrasikan **Dahoo Assistant** dengan arsitektur hybrid yang menggabungkan model cloud **Google Gemini 3.8 Flash** (`gemini-3.8-flash`) dengan dukungan **End-to-End SSE Streaming** dan **Dahoo Local Intelligence Rule Engine**.
 
 ---
 
-### 📌 Model Versi yang Digunakan: Gemini 3.5 Flash (`gemini-3.5-flash`)
+### 📌 Model Versi yang Digunakan: Gemini 3.8 Flash (`gemini-3.8-flash`)
 
-WISMON secara eksklusif dan tunggal menggunakan **`gemini-3.5-flash`** sebagai model AI berbasis cloud. 
+WISMON secara terstandarisasi menggunakan **`gemini-3.8-flash`** sebagai model AI berbasis cloud. 
 
-#### Mengapa Hanya `gemini-3.5-flash`?
-1. **Ketersediaan & Kestabilan Tinggi**: Model `gemini-3.5-flash` merupakan model resmi Google Gemini yang tersedia luas pada akun Google AI Studio tanpa kendala kuota khusus atau pembatasan tier tertentu. Model eksperimental seperti 3.8 kerap mengalami lonjakan beban (*503 Service Unavailable*), sedangkan model usang (seperti 2.5) sudah didepresiasi oleh Google.
-2. **Latensi Sangat Rendah & Respon Cepat**: Sebagai model kelas "Flash", inferensi berlangsung dalam hitungan detik, sangat cocok untuk asisten pemantauan sistem yang membutuhkan respon cepat saat terjadi insiden performa.
-3. **Dukungan Native Reasoning (`ThinkingConfig`)**: Menggunakan parameter reasoning bawaan Google SDK (`google-genai`) dengan level `low`, `medium` (default), dan `high` tanpa parameter sampling usang (`temperature`, `top_p`, `top_k`).
-4. **Efisiensi & Transparansi Biaya Token**: Penghitungan token selaras dengan Google AI Studio, di mana *thinking tokens* dilaporkan secara transparan bersama *prompt tokens* dan *candidates tokens*, memberikan estimasi biaya yang presisi pada badge UI Dahoo.
+#### Keunggulan & Spesifikasi `gemini-3.8-flash`:
+1. **End-to-End Server-Sent Events (SSE) Streaming**: Respon dihasilkan secara langsung dan bertahap ke antarmuka pengguna (`/api/dahoo/chat/stream`), mengeliminasi respon terpotong, waktu tunggu kaku, atau keharusan mengetik "lanjutkan".
+2. **Ketersediaan & Kestabilan Tinggi**: Model `gemini-3.8-flash` merupakan model resmi Google Gemini yang tersedia luas pada akun Google AI Studio tanpa kendala kuota khusus atau pembatasan tier tertentu.
+3. **Latensi Sangat Rendah & Respon Cepat**: Sebagai model kelas "Flash", inferensi berlangsung dalam hitungan detik, sangat cocok untuk asisten pemantauan sistem yang membutuhkan respon cepat saat terjadi insiden performa.
+4. **Dukungan Native Reasoning (`ThinkingConfig`)**: Menggunakan parameter penalaran resmi Google GenAI SDK (`google-genai`) dengan level `low`, `medium` (default), dan `high` tanpa parameter sampling usang (`temperature`, `top_p`, `top_k`).
+5. **Kapasitas Output Token Lega (`DAHOO_MAX_OUTPUT_TOKENS=2048`)**: Dahoo dapat memberikan analisis diagnosis dan rekomendasi troubleshooting lengkap tanpa batasan kalimat buatan yang kaku.
+6. **Efisiensi & Transparansi Biaya Token**: Penghitungan token selaras dengan Google AI Studio, di mana *thinking tokens* dilaporkan secara transparan bersama *prompt tokens* dan *candidates tokens*, memberikan estimasi biaya yang presisi pada badge UI Dahoo.
 
 ---
 
@@ -855,8 +860,8 @@ Dahoo bekerja melalui pipeline 7 tahap terintegrasi yang menjamin keamanan siste
                             YES                            NO
                              │                              │
                   ┌──────────▼──────────┐        ┌──────────▼──────────┐
-                  │ 3. Gemini 3.5 Flash │        │ 3. Dahoo Local Rule │
-                  │    Cloud AI Engine  │        │    Intelligence     │
+                  │ 3. Gemini 3.8 Flash │        │ 3. Dahoo Local Rule │
+                  │    SSE Stream Engine│        │    Intelligence     │
                   └──────────┬──────────┘        └──────────┬──────────┘
                              │ (Gagal / 503 / Offline)      │
                              └──────────────┬───────────────┘

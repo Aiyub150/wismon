@@ -15,6 +15,65 @@ class MemoryPage {
     });
 
     window.addEventListener('telemetry-update', (e) => this.update(e.detail));
+
+    const btnOptRam = document.getElementById('btn-optimize-ram');
+    if (btnOptRam) {
+      btnOptRam.addEventListener('click', async () => {
+        btnOptRam.disabled = true;
+        const originalHtml = btnOptRam.innerHTML;
+        btnOptRam.innerHTML = '<span>⚡ Mengoptimalkan...</span>';
+
+        if (window.showToast) {
+          window.showToast('info', 'Membersihkan working set RAM via Windows EmptyWorkingSet...', 'Memory Optimizer', 2500);
+        }
+
+        try {
+          const res = await fetch('/api/dahoo/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action_type: 'TRIM_MEMORY',
+              session_id: window.dahoo ? window.dahoo.sessionId : 'default',
+              confirmed: true
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+              if (window.showToast) {
+                window.showToast('success', `${data.message}${vDetail}`, 'Optimasi Memori Berhasil', 5000);
+              }
+            } else {
+              if (window.showToast) {
+                window.showToast('danger', data.message || 'Pembersihan memori tidak dapat diselesaikan.', 'Optimasi Memori Gagal', 4500);
+              }
+            }
+          } else {
+            if (window.showToast) {
+              window.showToast('danger', 'Gagal menghubungi service optimasi memori.', 'Optimasi Memori Gagal', 4500);
+            }
+          }
+        } catch (err) {
+          if (window.showToast) {
+            window.showToast('danger', `Kendala: ${err.message}`, 'Memory Optimizer', 3000);
+          }
+        } finally {
+          btnOptRam.disabled = false;
+          btnOptRam.innerHTML = originalHtml;
+        }
+      });
+    }
+
+    const btnAskDahooRam = document.getElementById('btn-ask-dahoo-ram');
+    if (btnAskDahooRam) {
+      btnAskDahooRam.addEventListener('click', () => {
+        if (window.dahoo) {
+          window.dahoo.askContextual('Tolong analisis kondisi memori RAM, commit charge, dan kernel pool saat ini.');
+        }
+      });
+    }
   }
 
   update(snap) {

@@ -36,13 +36,14 @@ class SecurityPage {
       const data = await res.json();
       if (data.success) {
         if (window.showToast) {
-          window.showToast('success', data.message || 'Semua anomali berhasil dimitigasi.', 'Mitigasi Massal Selesai');
+          const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+          window.showToast('success', `${data.message || 'Semua anomali berhasil dimitigasi.'}${vDetail}`, 'Mitigasi Massal Selesai', 5000);
         }
         this.fetchEventHistory();
         window.dispatchEvent(new CustomEvent('threat-resolved', { detail: data }));
       } else {
         if (window.showToast) {
-          window.showToast('danger', data.message || 'Gagal memitigasi anomali.', 'Mitigasi Gagal');
+          window.showToast('danger', data.message || 'Gagal memitigasi anomali.', 'Mitigasi Gagal', 4500);
         }
       }
     } catch (e) {

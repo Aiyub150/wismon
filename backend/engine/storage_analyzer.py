@@ -237,6 +237,16 @@ class StorageAnalyzer:
 
     def clean_user_temp_files(self) -> Dict[str, Any]:
         """Safely cleans unlocked files in the User Temp folder."""
+        import psutil
+        try:
+            disk_before = psutil.disk_usage("C:\\")
+            pct_before = round(disk_before.percent, 1)
+            free_before_gb = round(disk_before.free / (1024**3), 2)
+        except Exception:
+            disk_before = None
+            pct_before = 0.0
+            free_before_gb = 0.0
+
         user_profile = Path(os.environ.get("USERPROFILE", "C:\\"))
         temp_dir = Path(os.environ.get("TEMP", user_profile / "AppData" / "Local" / "Temp"))
         cleaned_files = 0
@@ -253,12 +263,46 @@ class StorageAnalyzer:
                     except Exception:
                         # Skip locked or in-use files
                         pass
+
+        try:
+            disk_after = psutil.disk_usage("C:\\")
+            pct_after = round(disk_after.percent, 1)
+            free_after_gb = round(disk_after.free / (1024**3), 2)
+            pct_diff = round(pct_before - pct_after, 2)
+        except Exception:
+            pct_after = pct_before
+            free_after_gb = free_before_gb
+            pct_diff = 0.0
+
         freed_mb = round(freed_bytes / (1024 * 1024), 2)
+        freed_gb = round(freed_bytes / (1024**3), 2)
+        freed_str = f"{freed_gb} GB" if freed_gb >= 1.0 else f"{freed_mb} MB"
+
         return {
             "success": True,
+            "action_type": "CLEAN_TEMP",
             "cleaned_files": cleaned_files,
+            "freed_bytes": freed_bytes,
             "freed_mb": freed_mb,
-            "message": f"Berhasil membersihkan {cleaned_files} file sementara ({freed_mb} MB) dari direktori Temp."
+            "freed_gb": freed_gb,
+            "freed_str": freed_str,
+            "pct_before": pct_before,
+            "pct_after": pct_after,
+            "pct_diff": pct_diff,
+            "free_before_gb": free_before_gb,
+            "free_after_gb": free_after_gb,
+            "message": f"Berhasil membersihkan {cleaned_files} file sementara ({freed_str}) dari direktori Temp. Kapasitas C: {pct_before}% ke {pct_after}%.",
+            "verification": {
+                "metric": "storage",
+                "cleaned_files": cleaned_files,
+                "freed_capacity": freed_str,
+                "disk_before": f"{pct_before}%",
+                "disk_after": f"{pct_after}%",
+                "diff_percent": pct_diff,
+                "free_space_gb": f"{free_after_gb} GB",
+                "verified": True,
+                "detail": f"File dibersihkan: {cleaned_files} ({freed_str}), Ruang disk C: {pct_before}% ke {pct_after}% (Bebas {free_after_gb} GB)"
+            }
         }
 
     def get_last_scan(self) -> Dict[str, Any]:

@@ -485,7 +485,7 @@
                 <h2 id="cpu-brand-name" style="font-family: var(--font-display); font-size: 1.25rem;">Windows Processor</h2>
                 <div class="text-muted font-mono" id="cpu-cores-text" style="font-size: 0.8rem; margin-top: 0.2rem;">Physical / Logical Cores</div>
               </div>
-              <div style="display: flex; gap: 1.5rem; text-align: right;">
+              <div style="display: flex; gap: 1.5rem; align-items: center; text-align: right; flex-wrap: wrap;">
                 <div>
                   <div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Frequency</div>
                   <div class="font-mono" id="cpu-freq-text" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary);">0 MHz</div>
@@ -494,6 +494,12 @@
                   <div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Total Load</div>
                   <div class="font-mono text-primary" id="cpu-total-perc" style="font-size: 1.25rem; font-weight: 700;">0%</div>
                 </div>
+                <button class="btn btn-primary btn-sm" id="btn-optimize-cpu" title="Tangguhkan sejenak proses non-sistem terberat untuk stabilkan CPU" style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span>⚡ Optimalkan CPU</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-ask-dahoo-cpu" title="Tanyakan analisis dan rekomendasi CPU ke Dahoo AI" style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span>💬 Tanya Dahoo</span>
+                </button>
               </div>
             </div>
           </div>
@@ -548,12 +554,20 @@
         <!-- PAGE: Memory -->
         <section id="page-memory" class="page-view">
           <div class="card" style="margin-bottom: 1.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
               <div>
                 <h2 style="font-family: var(--font-display); font-size: 1.25rem;">Physical RAM & Kernel Memory Architecture</h2>
                 <div class="text-muted font-mono" id="mem-capacity-text" style="font-size: 0.8rem;">0 GB Total</div>
               </div>
-              <div class="font-mono" id="mem-total-perc" style="font-size: 1.75rem; font-weight: 800; color: var(--color-primary);">0%</div>
+              <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <div class="font-mono" id="mem-total-perc" style="font-size: 1.75rem; font-weight: 800; color: var(--color-primary);">0%</div>
+                <button class="btn btn-primary btn-sm" id="btn-optimize-ram" title="Bebaskan cache working set RAM untuk melegakan memori" style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span>⚡ Optimalkan Memori</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-ask-dahoo-ram" title="Tanyakan analisis dan rekomendasi RAM ke Dahoo AI" style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span>💬 Tanya Dahoo</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -811,10 +825,11 @@
                     <th>State</th>
                     <th>PID</th>
                     <th>Process</th>
+                    <th style="text-align: right;">Action</th>
                   </tr>
                 </thead>
                 <tbody id="network-sockets-tbody">
-                  <tr><td colspan="7" class="text-center text-muted">Awaiting network connections...</td></tr>
+                  <tr><td colspan="8" class="text-center text-muted">Awaiting network connections...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1126,23 +1141,42 @@
         <div class="card" style="padding: 0.75rem; background: var(--bg-body); font-size: 0.75rem; margin-bottom: 0.5rem;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
             <span class="text-muted">Model & Thinking:</span>
-            <strong class="text-primary font-mono" id="dahoo-thinking-badge">Gemini 3.5 Flash (Med)</strong>
+            <strong class="text-primary font-mono" id="dahoo-thinking-badge">Gemini 3.8 Flash (Med)</strong>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
             <span class="text-muted">Estimated AI Cost:</span>
             <strong class="text-success font-mono" id="dahoo-cost-badge">$0.00000</strong>
           </div>
-          <div style="display: flex; justify-content: space-between;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
             <span class="text-muted">Tokens Consumed:</span>
             <strong class="text-info font-mono" id="dahoo-tokens-badge">0</strong>
           </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-muted">Sisa Token:</span>
+            <strong class="text-primary font-mono" id="dahoo-remaining-tokens-badge">1,048,576</strong>
+          </div>
         </div>
 
-        <!-- Suggestion Chips -->
-        <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem;">
-          <button class="btn btn-secondary btn-sm suggestion-pill">Berapa penggunaan CPU?</button>
-          <button class="btn btn-secondary btn-sm suggestion-pill">Berapa penggunaan RAM?</button>
-          <button class="btn btn-secondary btn-sm suggestion-pill">Apakah ada ancaman aktif?</button>
+        <!-- Dynamic Quick Action Pills (Performance & Remediation) -->
+        <div id="dahoo-quick-actions" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem;">
+          <button class="btn btn-secondary btn-sm quick-action-pill" data-action="TRIM_MEMORY" data-prompt="Tolong optimalkan memori RAM sekarang" style="font-size: 0.74rem; padding: 3px 8px; display: flex; align-items: center; gap: 4px;">
+            <span>⚡</span> <span>Optimalkan Memori</span>
+          </button>
+          <button class="btn btn-secondary btn-sm quick-action-pill" data-action="OPTIMIZE_CPU" data-prompt="Tolong stabilkan beban CPU sekarang" style="font-size: 0.74rem; padding: 3px 8px; display: flex; align-items: center; gap: 4px;">
+            <span>⚡</span> <span>Stabilkan CPU</span>
+          </button>
+          <button class="btn btn-secondary btn-sm quick-action-pill" data-action="MITIGATE_ALL_THREATS" data-prompt="Tolong tangani semua event ancaman keamanan di Threat Center" style="font-size: 0.74rem; padding: 3px 8px; display: flex; align-items: center; gap: 4px;">
+            <span>🛡️</span> <span id="quick-action-threat-text">Mitigasi Ancaman</span>
+          </button>
+          <button class="btn btn-secondary btn-sm quick-action-pill" data-action="CLEAN_TEMP" data-prompt="Tolong bersihkan file temporary sampah sekarang" style="font-size: 0.74rem; padding: 3px 8px; display: flex; align-items: center; gap: 4px;">
+            <span>🧹</span> <span>Bersihkan Temp</span>
+          </button>
+        </div>
+
+        <!-- Dynamic Status Chip (Streaming / Processing) -->
+        <div id="dahoo-processing-status" style="display: none; font-size: 0.75rem; color: var(--color-primary); background: var(--bg-body); border-radius: 6px; padding: 4px 8px; border: 1px dashed var(--color-primary); margin-bottom: 0.5rem; align-items: center; gap: 6px;">
+          <span class="status-spinner" style="display: inline-block; width: 10px; height: 10px; border: 2px solid var(--color-primary); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+          <span id="dahoo-processing-text">Memproses...</span>
         </div>
       </div>
 
@@ -1158,7 +1192,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
           <span id="dahoo-provider-status" class="text-primary font-mono" style="display: flex; align-items: center; gap: 0.35rem;">
             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span>
-            <span>Auto: Gemini 3.5 Flash</span>
+            <span>Auto: Gemini 3.8 Flash</span>
           </span>
           <span class="text-muted" style="font-size: 0.7rem;" id="dahoo-provider-fallback-hint">Auto-failover to Local Engine</span>
         </div>

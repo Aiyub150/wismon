@@ -149,7 +149,7 @@ class NetworkPage {
     if (filtered.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center text-muted" style="padding: 2rem;">
+          <td colspan="8" class="text-center text-muted" style="padding: 2rem;">
             ${query 
               ? `Tidak ditemukan koneksi yang cocok dengan "${escapeHtml(query)}"` 
               : (filterMode === 'external' 
@@ -165,6 +165,11 @@ class NetworkPage {
       const isExt = c.is_external;
       const isEst = c.state === 'ESTABLISHED';
       const rowStyle = isExt ? 'background: rgba(60, 80, 224, 0.04);' : '';
+      const domainLabel = c.domain_label && c.domain_label !== '—' ? c.domain_label : '';
+      const resolvedDomain = c.resolved_domain && c.resolved_domain !== '—' ? c.resolved_domain : '';
+      const procSafe = escapeHtml(c.process_name || 'Process');
+      const remoteSafe = escapeHtml(c.remote_address || '-');
+      const hostSafe = escapeHtml(c.remote_host || '-');
 
       return `
         <tr style="${rowStyle}">
@@ -176,12 +181,16 @@ class NetworkPage {
           </td>
           <td class="font-mono text-secondary" style="font-size: 0.75rem;">${escapeHtml(c.local_address)}</td>
           <td class="font-mono text-cyan" style="font-size: 0.75rem; font-weight: ${isExt ? '600' : 'normal'};">
-            ${escapeHtml(c.remote_address)}
+            ${remoteSafe}
           </td>
           <td>
-            <div style="display: flex; align-items: center; gap: 0.35rem;">
-              <span class="font-mono ${isExt ? 'text-primary font-semibold' : 'text-secondary'}" style="font-size: 0.8rem;">
-                ${escapeHtml(c.remote_host || '-')}
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                ${domainLabel ? `<span class="badge badge-primary font-mono" style="font-size: 0.68rem; padding: 1px 6px;">${escapeHtml(domainLabel)}</span>` : ''}
+                ${resolvedDomain && resolvedDomain !== domainLabel ? `<span class="text-xs font-mono font-semibold text-primary">${escapeHtml(resolvedDomain)}</span>` : ''}
+              </div>
+              <span class="font-mono ${isExt ? 'text-secondary font-semibold' : 'text-muted'}" style="font-size: 0.74rem;">
+                ${hostSafe}
               </span>
             </div>
           </td>
@@ -192,11 +201,29 @@ class NetworkPage {
           </td>
           <td class="font-mono" style="font-size: 0.75rem;">${c.pid}</td>
           <td>
-            <strong style="font-size: 0.82rem;">${escapeHtml(c.process_name)}</strong>
+            <strong style="font-size: 0.82rem;">${procSafe}</strong>
+          </td>
+          <td style="text-align: right;">
+            <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px;" onclick="window.networkPage.askDahooAboutSocket('${encodeURIComponent(JSON.stringify({ proc: c.process_name, pid: c.pid, remote: c.remote_address, host: c.remote_host, domain: domainLabel, resolved: resolvedDomain }))}')" title="Tanyakan keamanan & fungsi koneksi ini ke Dahoo AI">
+              <span>💬</span> <span>Tanya</span>
+            </button>
           </td>
         </tr>
       `;
     }).join('');
+  }
+
+  askDahooAboutSocket(encodedData) {
+    try {
+      const data = JSON.parse(decodeURIComponent(encodedData));
+      const targetName = data.resolved || data.domain || data.host || data.remote;
+      const prompt = `Tolong analisis koneksi internet ini: Proses "${data.proc}" (PID: ${data.pid}) sedang tersambung ke ${data.remote} (${targetName}). Apakah koneksi ini aman, wajar, dan apa fungsinya?`;
+      if (window.dahoo) {
+        window.dahoo.askContextual(prompt);
+      }
+    } catch (e) {
+      console.error('Failed to ask Dahoo about socket:', e);
+    }
   }
 }
 

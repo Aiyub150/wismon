@@ -64,7 +64,8 @@ class Aggregator:
             asyncio.create_task(self._process_worker(), name="process_worker"),
             asyncio.create_task(self._socket_worker(), name="socket_worker"),
             asyncio.create_task(self._services_worker(), name="services_worker"),
-            asyncio.create_task(self._hardware_worker(), name="hardware_worker")
+            asyncio.create_task(self._hardware_worker(), name="hardware_worker"),
+            asyncio.create_task(self._db_batch_worker(), name="db_batch_worker")
         ]
         logger.info("Aggregator decoupled collection workers started.")
 
@@ -138,6 +139,15 @@ class Aggregator:
             except Exception as e:
                 logger.error(f"Hardware worker error: {e}")
             await asyncio.sleep(10.0 if self._subscribers else 15.0)
+
+    async def _db_batch_worker(self):
+        """Background worker for flushing SQLite telemetry records every 5-10s completely decoupled from fast loop."""
+        while self._running:
+            try:
+                await asyncio.sleep(5.0)
+                await db_manager.flush()
+            except Exception as e:
+                logger.error(f"DB batch worker error: {e}")
 
     async def _fast_collection_loop(self):
         """High-frequency ~1.0s telemetry loop delivering real-time UI frames."""

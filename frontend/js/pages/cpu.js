@@ -22,6 +22,69 @@ class CPUPage {
         this.fetchWorkloadAnalysis();
       }
     }, 6000);
+
+    const btnOpt = document.getElementById('btn-optimize-cpu');
+    if (btnOpt) {
+      btnOpt.addEventListener('click', async () => {
+        btnOpt.disabled = true;
+        const originalHtml = btnOpt.innerHTML;
+        btnOpt.innerHTML = '<span>⚡ Mengoptimalkan...</span>';
+
+        if (window.showToast) {
+          window.showToast('info', 'Mengevaluasi beban prosesor & menstabilkan CPU...', 'CPU Optimizer', 2500);
+        }
+
+        try {
+          const res = await fetch('/api/dahoo/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action_type: 'OPTIMIZE_CPU',
+              session_id: window.dahoo ? window.dahoo.sessionId : 'default',
+              confirmed: true
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+              if (window.showToast) {
+                window.showToast('success', `${data.message}${vDetail}`, 'CPU Optimizer Berhasil', 5000);
+              }
+            } else if (data.is_protected) {
+              if (window.showToast) {
+                window.showToast('warning', `${data.message}. ${data.recommendation || ''}`, 'Proses Terproteksi', 5000);
+              }
+            } else {
+              if (window.showToast) {
+                window.showToast('danger', data.message || 'Optimasi CPU tidak berhasil.', 'CPU Optimizer Gagal', 4500);
+              }
+            }
+          } else {
+            if (window.showToast) {
+              window.showToast('danger', 'Gagal menghubungi service optimasi CPU.', 'CPU Optimizer Gagal', 4500);
+            }
+          }
+        } catch (err) {
+          if (window.showToast) {
+            window.showToast('danger', `Kendala: ${err.message}`, 'CPU Optimizer', 3000);
+          }
+        } finally {
+          btnOpt.disabled = false;
+          btnOpt.innerHTML = originalHtml;
+        }
+      });
+    }
+
+    const btnAskDahooCpu = document.getElementById('btn-ask-dahoo-cpu');
+    if (btnAskDahooCpu) {
+      btnAskDahooCpu.addEventListener('click', () => {
+        if (window.dahoo) {
+          window.dahoo.askContextual('Tolong analisis kondisi prosesor dan beban kerja CPU saat ini.');
+        }
+      });
+    }
   }
 
   update(snap) {

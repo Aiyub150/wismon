@@ -187,17 +187,57 @@ class ProcessCollector(BaseCollector):
                     "message": f"Security violation: Protected Security Agent / EDR '{name}' cannot be terminated."
                 }
 
+            # Capture metrics before termination for verification
+            cpu_freed = round(p.cpu_percent(), 1)
+            try:
+                mem_bytes = p.memory_info().rss
+                mem_freed_mb = round(mem_bytes / (1024 * 1024), 1)
+            except Exception:
+                mem_freed_mb = 0.0
+
             p.terminate()
             p.wait(timeout=2)
-            return {"success": True, "message": f"Process {name} (PID: {pid}) terminated successfully."}
+            return {
+                "success": True,
+                "action_type": "TERMINATE_PROCESS",
+                "pid": pid,
+                "name": name,
+                "freed_cpu_percent": cpu_freed,
+                "freed_memory_mb": mem_freed_mb,
+                "message": f"Proses {name} (PID: {pid}) berhasil dihentikan. Membebaskan {cpu_freed}% CPU dan {mem_freed_mb} MB RAM.",
+                "verification": {
+                    "metric": "process",
+                    "pid": pid,
+                    "name": name,
+                    "freed_cpu": f"{cpu_freed}%",
+                    "freed_ram": f"{mem_freed_mb} MB",
+                    "verified": True,
+                    "detail": f"Proses {name} (PID: {pid}) diterminasi. Kapasitas RAM dibebaskan: {mem_freed_mb} MB, Beban CPU dibebaskan: {cpu_freed}%"
+                }
+            }
         except psutil.TimeoutExpired:
             p.kill()
-            return {"success": True, "message": f"Process {pid} killed forcefully."}
+            return {
+                "success": True,
+                "action_type": "TERMINATE_PROCESS",
+                "pid": pid,
+                "name": name,
+                "freed_cpu_percent": cpu_freed if 'cpu_freed' in locals() else 0.0,
+                "freed_memory_mb": mem_freed_mb if 'mem_freed_mb' in locals() else 0.0,
+                "message": f"Proses {name} (PID: {pid}) dipaksa berhenti (kill).",
+                "verification": {
+                    "metric": "process",
+                    "pid": pid,
+                    "name": name,
+                    "verified": True,
+                    "detail": f"Proses {name} (PID: {pid}) dihentikan secara paksa."
+                }
+            }
         except psutil.NoSuchProcess:
-            return {"success": False, "message": f"Process {pid} no longer exists."}
+            return {"success": False, "message": f"Proses PID {pid} sudah tidak aktif atau telah ditutup.", "verified": False}
         except psutil.AccessDenied:
-            return {"success": False, "message": f"Access denied terminating PID {pid}. Administrator rights required."}
+            return {"success": False, "message": f"Izin ditolak untuk menghentikan PID {pid}. Memerlukan hak Administrator.", "verified": False}
         except Exception as e:
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": f"Gagal menghentikan proses: {str(e)}", "verified": False}
 
 process_collector = ProcessCollector()

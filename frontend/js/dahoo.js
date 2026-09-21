@@ -39,6 +39,7 @@ class DahooController {
     this.thinkingBadge = document.getElementById('dahoo-thinking-badge');
     this.costBadge = document.getElementById('dahoo-cost-badge');
     this.tokenBadge = document.getElementById('dahoo-tokens-badge');
+    this.remainingTokenBadge = document.getElementById('dahoo-remaining-tokens-badge');
     this.providerStatus = document.getElementById('dahoo-provider-status');
     this.fallbackHint = document.getElementById('dahoo-provider-fallback-hint');
     this.cloudAvailable = false;
@@ -121,15 +122,15 @@ class DahooController {
     const topbarDahoo = document.getElementById('topbar-dahoo-btn');
     if (topbarDahoo) topbarDahoo.addEventListener('click', () => this.toggleDrawer(true));
 
-    document.querySelectorAll('.suggestion-pill').forEach(pill => {
+    document.querySelectorAll('.quick-action-pill').forEach(pill => {
       pill.addEventListener('click', () => {
+        const prompt = pill.getAttribute('data-prompt') || pill.textContent.trim();
         if (this.chatInput) {
-          this.chatInput.value = pill.textContent.trim();
+          this.chatInput.value = prompt;
           this.sendMessage();
         }
       });
     });
-
 
     window.addEventListener('telemetry-update', (e) => {
       const snap = e.detail;
@@ -138,7 +139,55 @@ class DahooController {
       const cpu = snap.cpu ? snap.cpu.total_percent : 0;
       this.setEmotion(score, threatCount, cpu);
       this.checkProactiveNotifications(snap);
+      this.updateQuickActions(snap);
     });
+  }
+
+  updateQuickActions(snap) {
+    if (!snap) return;
+    const threats = snap.threats || [];
+    const threatBtn = document.querySelector('#dahoo-quick-actions [data-action="MITIGATE_ALL_THREATS"]');
+    const threatText = document.getElementById('quick-action-threat-text');
+    if (threatBtn && threatText) {
+      if (threats.length > 0) {
+        threatText.textContent = `Mitigasi (${threats.length}) Ancaman`;
+        threatBtn.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+        threatBtn.style.background = 'rgba(239, 68, 68, 0.12)';
+        threatBtn.style.color = '#DC2626';
+      } else {
+        threatText.textContent = 'Mitigasi Ancaman';
+        threatBtn.style.borderColor = '';
+        threatBtn.style.background = '';
+        threatBtn.style.color = '';
+      }
+    }
+
+    const cpuVal = snap.cpu ? snap.cpu.total_percent : 0;
+    const cpuBtn = document.querySelector('#dahoo-quick-actions [data-action="OPTIMIZE_CPU"] span:last-child');
+    if (cpuBtn) {
+      cpuBtn.textContent = cpuVal > 70 ? `Stabilkan CPU (${cpuVal}%)` : 'Stabilkan CPU';
+    }
+
+    const ramVal = snap.memory ? snap.memory.percent : 0;
+    const ramBtn = document.querySelector('#dahoo-quick-actions [data-action="TRIM_MEMORY"] span:last-child');
+    if (ramBtn) {
+      ramBtn.textContent = ramVal > 75 ? `Optimalkan Memori (${ramVal}%)` : 'Optimalkan Memori';
+    }
+  }
+
+  formatProviderBadge(meta) {
+    if (!meta) return '';
+    const m = String(meta).toLowerCase();
+    if (m.includes('gemini') || m.includes('cloud') || m.includes('flash')) {
+      const cleanName = meta.trim();
+      return `<span class="badge badge-success font-mono" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 ${escapeHtml(cleanName)}</span>`;
+    } else if (m.includes('fallback')) {
+      return `<span class="badge badge-warning font-mono" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(245, 158, 11, 0.15); color: #D97706; border: 1px solid rgba(245, 158, 11, 0.3);">🟠 Local Fallback (Cloud Offline)</span>`;
+    } else if (m.includes('action') || m.includes('executor')) {
+      return `<span class="badge badge-primary font-mono" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(59, 130, 246, 0.15); color: #2563EB; border: 1px solid rgba(59, 130, 246, 0.3);">🔵 Dahoo Action Executor</span>`;
+    } else {
+      return `<span class="badge badge-neutral font-mono" style="font-size: 0.68rem; padding: 1px 6px; background: rgba(100, 116, 139, 0.15); color: #475569; border: 1px solid rgba(100, 116, 139, 0.3);">⚪ Local Intelligence (Offline)</span>`;
+    }
   }
 
   toggleDrawer(open) {
@@ -174,7 +223,7 @@ class DahooController {
           this.speechBubble.textContent = data.proactive_speech;
         }
         this.cloudAvailable = data.cloud_available || false;
-        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.5 Flash' : 'Offline Rule Engine');
+        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.8 Flash' : 'Offline Rule Engine');
         // Clean any existing parenthesized suffix like (MEDIUM) to avoid duplicate (MEDIUM) (MEDIUM)
         const cleanModel = rawModel.replace(/\s*\([A-Za-z0-9_-]+\)\s*$/, '').trim();
 
@@ -204,6 +253,9 @@ class DahooController {
         const stats = await res.json();
         if (this.costBadge) this.costBadge.textContent = `$${stats.total_cost.toFixed(5)}`;
         if (this.tokenBadge) this.tokenBadge.textContent = stats.total_tokens.toLocaleString();
+        if (this.remainingTokenBadge && stats.remaining_tokens !== undefined) {
+          this.remainingTokenBadge.textContent = stats.remaining_tokens.toLocaleString();
+        }
       }
     } catch (e) {}
   }
@@ -248,6 +300,55 @@ class DahooController {
     }
   }
 
+  attachActionCard(bubble, action) {
+    if (!action || !action.type) return;
+    const actionBox = document.createElement('div');
+    actionBox.className = 'chat-action-card';
+    actionBox.style = 'margin-top: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.06); font-size: 0.8rem;';
+
+    const actionHeader = document.createElement('div');
+    actionHeader.style = 'font-weight: 600; color: #2563EB; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 4px;';
+    actionHeader.innerHTML = `<span>⚡</span> <span>Rekomendasi Tindakan: <strong>${escapeHtml(action.label || 'Tindakan Sistem')}</strong></span>`;
+    actionBox.appendChild(actionHeader);
+
+    if (action.reason) {
+      const reasonDiv = document.createElement('div');
+      reasonDiv.style = 'color: var(--text-muted, #64748B); font-size: 0.75rem; margin-bottom: 0.4rem;';
+      reasonDiv.innerHTML = `<em>Alasan:</em> ${escapeHtml(action.reason)}`;
+      actionBox.appendChild(reasonDiv);
+    }
+
+    const btnRow = document.createElement('div');
+    btnRow.style = 'display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem;';
+
+    const actBtn = document.createElement('button');
+    actBtn.className = 'btn btn-primary btn-sm';
+    actBtn.style = 'padding: 4px 12px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;';
+    actBtn.innerHTML = `<span>✓</span> <span>Konfirmasi Tindakan</span>`;
+    actBtn.onclick = () => {
+      actBtn.disabled = true;
+      actBtn.textContent = '⚡ Memproses...';
+      if (window.showToast) {
+        window.showToast('info', 'Mengeksekusi tindakan perbaikan sistem...', 'Dahoo Action Engine', 2500);
+      }
+      this.executeDahooAction(action.type, action.params, actionBox);
+    };
+    btnRow.appendChild(actBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary btn-sm';
+    cancelBtn.style = 'padding: 4px 10px; font-size: 0.78rem;';
+    cancelBtn.textContent = 'Batalkan';
+    cancelBtn.onclick = () => {
+      actionBox.remove();
+      this.appendMessage('assistant', 'Tindakan dibatalkan. Hubungi aku lagi jika butuh bantuan! 🐺');
+    };
+    btnRow.appendChild(cancelBtn);
+
+    actionBox.appendChild(btnRow);
+    bubble.appendChild(actionBox);
+  }
+
   appendMessage(role, text, meta = '', action = null, scroll = true) {
     if (!this.chatBody) return;
     const msgDiv = document.createElement('div');
@@ -262,51 +363,7 @@ class DahooController {
 
     // Render interactive Two-Phase Action Proposal Card
     if (action && action.type) {
-      const actionBox = document.createElement('div');
-      actionBox.className = 'chat-action-card';
-      actionBox.style = 'margin-top: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.06); font-size: 0.8rem;';
-
-      const actionHeader = document.createElement('div');
-      actionHeader.style = 'font-weight: 600; color: #2563EB; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 4px;';
-      actionHeader.innerHTML = `<span>⚡</span> <span>Rekomendasi Tindakan: <strong>${escapeHtml(action.label || 'Tindakan Sistem')}</strong></span>`;
-      actionBox.appendChild(actionHeader);
-
-      if (action.reason) {
-        const reasonDiv = document.createElement('div');
-        reasonDiv.style = 'color: var(--text-muted, #64748B); font-size: 0.75rem; margin-bottom: 0.4rem;';
-        reasonDiv.innerHTML = `<em>Alasan:</em> ${escapeHtml(action.reason)}`;
-        actionBox.appendChild(reasonDiv);
-      }
-
-      const btnRow = document.createElement('div');
-      btnRow.style = 'display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem;';
-
-      const actBtn = document.createElement('button');
-      actBtn.className = 'btn btn-primary btn-sm';
-      actBtn.style = 'padding: 4px 12px; font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;';
-      actBtn.innerHTML = `<span>✓</span> <span>Konfirmasi Tindakan</span>`;
-      actBtn.onclick = () => {
-        actBtn.disabled = true;
-        actBtn.textContent = '⚡ Memproses...';
-        if (window.showToast) {
-          window.showToast('info', 'Mengeksekusi tindakan perbaikan sistem...', 'Dahoo Action Engine', 2500);
-        }
-        this.executeDahooAction(action.type, action.params, actionBox);
-      };
-      btnRow.appendChild(actBtn);
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'btn btn-secondary btn-sm';
-      cancelBtn.style = 'padding: 4px 10px; font-size: 0.78rem;';
-      cancelBtn.textContent = 'Batalkan';
-      cancelBtn.onclick = () => {
-        actionBox.remove();
-        this.appendMessage('assistant', 'Tindakan dibatalkan. Hubungi aku lagi jika butuh bantuan! 🐺');
-      };
-      btnRow.appendChild(cancelBtn);
-
-      actionBox.appendChild(btnRow);
-      bubble.appendChild(actionBox);
+      this.attachActionCard(bubble, action);
     }
 
     msgDiv.appendChild(bubble);
@@ -316,7 +373,8 @@ class DahooController {
     if (role === 'user') {
       metaSpan.innerHTML = `<span>${timeStr}</span> <span style="color:#60A5FA;">✓✓</span>`;
     } else {
-      metaSpan.innerHTML = `<span>${timeStr}</span> ${meta ? '• ' + escapeHtml(meta) : ''}`;
+      const badgeHtml = this.formatProviderBadge(meta);
+      metaSpan.innerHTML = `<span>${timeStr}</span> ${badgeHtml ? '• ' + badgeHtml : ''}`;
     }
     msgDiv.appendChild(metaSpan);
 
@@ -373,8 +431,26 @@ class DahooController {
         }
 
         this.appendMessage('assistant', detailText, 'Dahoo Action Engine');
+
         if (window.showToast) {
-          window.showToast(data.success ? 'success' : 'warning', data.message || 'Tindakan selesai.', 'Dahoo Assistant');
+          if (data.success) {
+            let toastTitle = 'Tindakan Berhasil';
+            if (actionType === 'TRIM_MEMORY' || data.action_type === 'TRIM_MEMORY') toastTitle = 'Optimasi Memori Berhasil';
+            else if (actionType === 'OPTIMIZE_CPU' || data.action_type === 'OPTIMIZE_CPU') toastTitle = 'Optimasi CPU Berhasil';
+            else if (actionType === 'CLEAN_TEMP' || data.action_type === 'CLEAN_TEMP') toastTitle = 'Pembersihan Temp Berhasil';
+            else if (actionType === 'COOLDOWN_PROCESS') toastTitle = 'Cooldown Proses Berhasil';
+            else if (actionType === 'TERMINATE_PROCESS') toastTitle = 'Proses Dihentikan Berhasil';
+            else if (actionType === 'MITIGATE_ALL_THREATS') toastTitle = 'Mitigasi Ancaman Berhasil';
+
+            const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+            window.showToast('success', `${data.message || 'Tindakan berhasil dieksekusi.'}${vDetail}`, toastTitle, 5000);
+          } else {
+            const isProtected = data.is_protected;
+            const toastType = isProtected ? 'warning' : 'danger';
+            const toastTitle = isProtected ? 'Tindakan Ditolak (Proteksi Sistem)' : 'Tindakan Gagal';
+            const toastMsg = data.message ? `${data.message}${data.recommendation ? ' ' + data.recommendation : ''}` : 'Gagal mengeksekusi tindakan perbaikan.';
+            window.showToast(toastType, toastMsg, toastTitle, 5000);
+          }
         }
 
         window.dispatchEvent(new CustomEvent('threat-resolved', { detail: data }));
@@ -382,7 +458,7 @@ class DahooController {
       } else {
         this.appendMessage('assistant', '⚠️ Gagal mengeksekusi tindakan perbaikan.', 'Dahoo Action Engine');
         if (window.showToast) {
-          window.showToast('danger', 'Gagal mengeksekusi tindakan.', 'Dahoo Assistant');
+          window.showToast('danger', 'Gagal mengeksekusi tindakan perbaikan (Server error).', 'Tindakan Gagal', 4500);
         }
       }
     } catch (e) {
@@ -393,7 +469,7 @@ class DahooController {
       const errMsg = isTimeout ? 'Batas waktu respon 10 detik terlampaui (Timeout).' : e.message;
       this.appendMessage('assistant', `⚠️ Tindakan belum selesai: ${errMsg}\n\nSilakan coba kembali jika sistem belum merespons.`, 'Action Engine');
       if (window.showToast) {
-        window.showToast('danger', 'Tindakan: ' + errMsg, 'Dahoo Assistant');
+        window.showToast('danger', 'Gagal: ' + errMsg, 'Tindakan Gagal', 4500);
       }
     }
   }
@@ -477,18 +553,90 @@ class DahooController {
     if (typing) typing.remove();
   }
 
+  createAssistantMessageBubble() {
+    if (!this.chatBody) return null;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-msg assistant';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+    msgDiv.appendChild(bubble);
+
+    const metaSpan = document.createElement('span');
+    metaSpan.className = 'chat-meta';
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    metaSpan.innerHTML = `<span>${timeStr}</span> <span class="bubble-model-tag"></span>`;
+    msgDiv.appendChild(metaSpan);
+
+    this.chatBody.appendChild(msgDiv);
+    this.chatBody.scrollTop = this.chatBody.scrollHeight;
+
+    let accumulatedText = '';
+    let renderScheduled = false;
+
+    const updateText = (chunk) => {
+      accumulatedText += chunk;
+      if (!renderScheduled) {
+        renderScheduled = true;
+        requestAnimationFrame(() => {
+          bubble.innerHTML = formatMarkdown(accumulatedText);
+          this.chatBody.scrollTop = this.chatBody.scrollHeight;
+          renderScheduled = false;
+        });
+      }
+    };
+
+    const finalizeText = (metaHtml, action = null) => {
+      bubble.innerHTML = formatMarkdown(accumulatedText);
+      const tag = metaSpan.querySelector('.bubble-model-tag');
+      if (tag && metaHtml) {
+        tag.innerHTML = `• ${metaHtml}`;
+      }
+      if (action && action.type) {
+        this.attachActionCard(bubble, action);
+      }
+      this.chatBody.scrollTop = this.chatBody.scrollHeight;
+    };
+
+    return { msgDiv, bubble, metaSpan, updateText, finalizeText, getAccumulatedText: () => accumulatedText };
+  }
+
+  askContextual(prompt, context = '') {
+    this.toggleDrawer(true);
+    if (this.chatInput) {
+      this.chatInput.value = prompt;
+      this.sendMessage();
+    }
+  }
+
   async sendMessage() {
     const text = this.chatInput.value.trim();
     if (!text) return;
 
     this.chatInput.value = '';
     this.appendMessage('user', text);
-    this.showTypingIndicator();
 
     if (this.avatarBtn) this.avatarBtn.classList.add('thinking');
 
+    const statusContainer = document.getElementById('dahoo-processing-status');
+    const statusText = document.getElementById('dahoo-processing-text');
+    const setStatus = (msg) => {
+      if (statusContainer && statusText) {
+        statusText.textContent = msg;
+        statusContainer.style.display = 'flex';
+      }
+    };
+    const hideStatus = () => {
+      if (statusContainer) statusContainer.style.display = 'none';
+    };
+
+    setStatus('Mengirim permintaan...');
+
+    const bubbleHelper = this.createAssistantMessageBubble();
+
     try {
-      const res = await fetch('/api/dahoo/chat', {
+      const res = await fetch('/api/dahoo/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -497,23 +645,82 @@ class DahooController {
         })
       });
 
-      this.removeTypingIndicator();
-
-      if (res.ok) {
-        const data = await res.json();
-        const totalTok = (data.input_tokens || 0) + (data.output_tokens || 0);
-        const metaText = data.engine === 'cloud' 
-          ? `${data.model || 'Gemini 3.5 Flash'} (${totalTok} tok)`
-          : 'Dahoo Local Engine';
-        this.appendMessage('assistant', data.reply, metaText, data.action);
-        this.updateMetrics();
-      } else {
-        this.appendMessage('assistant', 'Aww, maaf terjadi kendala saat memproses permintaanmu. Coba tanyakan kembali.');
+      if (!res.ok) {
+        hideStatus();
+        if (bubbleHelper) {
+          bubbleHelper.finalizeText(this.formatProviderBadge('fallback'), null);
+          bubbleHelper.bubble.innerHTML = 'Aww, maaf terjadi kendala saat memproses permintaanmu. Coba tanyakan kembali.';
+        }
+        return;
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let pendingAction = null;
+      let finalMeta = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep remainder
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.substring(5).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const ev = JSON.parse(jsonStr);
+            if (ev.type === 'status') {
+              setStatus(ev.message || 'Memproses...');
+            } else if (ev.type === 'chunk') {
+              hideStatus();
+              bubbleHelper.updateText(ev.text);
+            } else if (ev.type === 'action') {
+              pendingAction = ev.action;
+            } else if (ev.type === 'done') {
+              hideStatus();
+              const totalTok = (ev.input_tokens || 0) + (ev.output_tokens || 0);
+              const remainingTok = ev.remaining_tokens !== undefined ? ev.remaining_tokens : null;
+              const remainingStr = remainingTok !== null ? ` | Sisa: ${remainingTok.toLocaleString()}` : '';
+              if (ev.provider === 'cloud') {
+                const modelName = (ev.model || 'Gemini 3.8 Flash').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                finalMeta = this.formatProviderBadge(`${modelName} (${totalTok} tok${remainingStr})`);
+              } else if (ev.provider === 'local-fallback') {
+                finalMeta = this.formatProviderBadge('fallback');
+              } else if (ev.provider === 'action-executor') {
+                finalMeta = this.formatProviderBadge('action-executor');
+              } else {
+                finalMeta = this.formatProviderBadge('local');
+              }
+            } else if (ev.type === 'error') {
+              hideStatus();
+              bubbleHelper.updateText(`\n⚠️ *${ev.message}*`);
+            }
+          } catch (pe) {
+            console.error('Error parsing SSE chunk:', pe);
+          }
+        }
+      }
+
+      hideStatus();
+      if (bubbleHelper) {
+        bubbleHelper.finalizeText(finalMeta, pendingAction);
+      }
+      this.updateMetrics();
     } catch (err) {
-      this.removeTypingIndicator();
-      this.appendMessage('assistant', `Aww, server offline: ${err.message}`);
+      hideStatus();
+      if (bubbleHelper) {
+        bubbleHelper.finalizeText('Offline', null);
+        bubbleHelper.bubble.innerHTML = `Aww, server offline: ${escapeHtml(err.message)}`;
+      }
     } finally {
+      hideStatus();
       if (this.avatarBtn) this.avatarBtn.classList.remove('thinking');
     }
   }
@@ -522,4 +729,3 @@ class DahooController {
 document.addEventListener('DOMContentLoaded', () => {
   window.dahoo = new DahooController();
 });
-

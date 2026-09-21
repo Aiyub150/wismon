@@ -229,15 +229,16 @@ class App {
         body: JSON.stringify({ pid: this.pendingKillPid, confirm: true })
       });
       const data = await res.json();
-      if (res.ok) {
-        this.showToast('success', data.message || 'Process terminated.', 'Proses Dihentikan');
+      if (res.ok && data.success) {
+        const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+        this.showToast('success', `${data.message}${vDetail}`, 'Proses Dihentikan Berhasil', 5000);
         this.closeAllModals();
         if (window.processesPage) window.processesPage.fetchProcesses();
       } else {
-        this.showToast('danger', data.detail || 'Termination failed.', 'Gagal Menghentikan');
+        this.showToast('danger', data.detail || data.message || 'Gagal menghentikan proses.', 'Gagal Menghentikan', 4500);
       }
     } catch (e) {
-      this.showToast('danger', 'Communication error: ' + e.message, 'Kesalahan Jaringan');
+      this.showToast('danger', 'Kesalahan komunikasi: ' + e.message, 'Kesalahan Jaringan', 4500);
     }
   }
 
@@ -262,17 +263,19 @@ class App {
           });
           const data = await res.json();
           if (res.ok && data.success) {
-            this.showToast('success', data.message || 'Tindakan keamanan berhasil dieksekusi.', 'Mitigasi Berhasil');
+            const vDetail = data.verification?.detail ? ` • ${data.verification.detail}` : '';
+            this.showToast('success', `${data.message || 'Tindakan keamanan berhasil dieksekusi.'}${vDetail}`, 'Mitigasi Berhasil', 5000);
             if (window.securityPage) window.securityPage.fetchEventHistory();
           } else {
             const msg = data.detail || data.message || 'Tindakan mitigasi tidak dapat diselesaikan.';
-            this.showToast('danger', msg, 'Mitigasi Gagal');
+            const isProt = data.is_protected;
+            this.showToast(isProt ? 'warning' : 'danger', msg, isProt ? 'Proses Terproteksi' : 'Mitigasi Gagal', 5000);
             if (window.securityPage && data.can_fallback) {
               window.securityPage.showFallbackOptions(threatId, data);
             }
           }
         } catch (e) {
-          this.showToast('danger', 'Error komunikasi dengan server: ' + e.message, 'Koneksi Terputus');
+          this.showToast('danger', 'Error komunikasi dengan server: ' + e.message, 'Koneksi Terputus', 4500);
         }
       },
       'Eksekusi',

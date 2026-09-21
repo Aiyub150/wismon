@@ -6,7 +6,7 @@ Enumerates active TCP/UDP sockets and resolves remote hostnames asynchronously w
 import socket
 import threading
 import psutil
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from backend.collectors.base import BaseCollector
 
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +24,39 @@ class SocketCollector(BaseCollector):
         self._cache_lock = threading.Lock()
         self._dns_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="wismon_dns")
         self._pid_name_cache: Dict[int, str] = {}
+        self._windows_dns_cache: Dict[str, str] = {}
+        self._last_dns_cache_poll: float = 0.0
         self._cleanup_tick: int = 0
+
+    def _poll_windows_dns_cache(self):
+        """Periodically queries Windows DNS Client Cache for accurate browser domain attribution."""
+        now = time.time()
+        if now - self._last_dns_cache_poll < 15.0:
+            return
+        self._last_dns_cache_poll = now
+
+        def _worker():
+            try:
+                import subprocess, json
+                flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                       "Get-DnsClientCache | Where-Object { $_.Data -ne $null } | Select-Object -Property Entry, Data | ConvertTo-Json -Compress"]
+                out = subprocess.check_output(cmd, text=True, timeout=5, creationflags=flags)
+                data = json.loads(out)
+                if isinstance(data, dict):
+                    data = [data]
+                new_mappings = {}
+                for item in data:
+                    entry = item.get("Entry")
+                    val = item.get("Data")
+                    if entry and val:
+                        new_mappings[str(val).strip()] = str(entry).strip()
+                with self._cache_lock:
+                    self._windows_dns_cache.update(new_mappings)
+            except Exception:
+                pass
+
+        self._dns_executor.submit(_worker)
 
     def _async_resolve_dns(self, ip: str):
         """Asynchronously resolve an IP address in a background worker thread."""
@@ -43,12 +75,85 @@ class SocketCollector(BaseCollector):
         if not ip or ip in ("—", "0.0.0.0", "127.0.0.1", "::1", "::"):
             return self._dns_cache.get(ip, ip or "—")
         with self._cache_lock:
+            # Check Windows DNS client cache first (direct browser resolution)
+            if ip in self._windows_dns_cache:
+                return self._windows_dns_cache[ip]
             if ip in self._dns_cache:
                 return self._dns_cache[ip]
             if ip not in self._dns_pending:
                 self._dns_pending.add(ip)
                 self._dns_executor.submit(self._async_resolve_dns, ip)
         return ip  # Immediate non-blocking response
+
+    def _map_friendly_domain(self, host: str, ip: str) -> Tuple[str, str]:
+        """
+        Derives both a clean resolved domain and a recognizable service label.
+        Returns: (resolved_domain, domain_label)
+        """
+        raw = host or ip or "—"
+        if not host or host in ("—", ip):
+            # Check if Windows DNS cache has mapped this IP
+            with self._cache_lock:
+                cached_entry = self._windows_dns_cache.get(ip)
+            if cached_entry:
+                raw = cached_entry
+
+        r_lower = raw.lower()
+
+        # YouTube / Google Services
+        if any(k in r_lower for k in ("1e100.net", "googlevideo", "youtube", "ytimg", "google", "gstatic")):
+            clean = "youtube.com" if any(y in r_lower for y in ("youtube", "googlevideo", "ytimg")) else "google.com"
+            return clean, "YouTube / Google"
+
+        # TikTok / ByteDance
+        if any(k in r_lower for k in ("byteoversea", "tiktok", "ibytedtos", "pstatp")):
+            return "tiktok.com", "TikTok"
+
+        # Meta / Facebook / Instagram / WhatsApp
+        if any(k in r_lower for k in ("fbcdn", "facebook", "meta.com", "instagram", "whatsapp")):
+            return "meta.com", "Meta / Facebook / IG"
+
+        # GitHub
+        if any(k in r_lower for k in ("github.com", "githubusercontent")):
+            return "github.com", "GitHub"
+
+        # Discord
+        if any(k in r_lower for k in ("discord.gg", "discord.com", "discordapp")):
+            return "discord.com", "Discord"
+
+        # Spotify
+        if any(k in r_lower for k in ("spotify.com", "scdn.co", "spotifycdn")):
+            return "spotify.com", "Spotify"
+
+        # Netflix
+        if any(k in r_lower for k in ("netflix.com", "nflxvideo.net", "nflxext")):
+            return "netflix.com", "Netflix"
+
+        # Steam / Valve
+        if any(k in r_lower for k in ("steamcontent", "steampowered", "steamcommunity")):
+            return "steampowered.com", "Steam / Valve"
+
+        # Microsoft / Azure
+        if any(k in r_lower for k in ("microsoft", "msedge", "azure", "windows.net", "live.com", "office.com")):
+            return "microsoft.com", "Microsoft / Azure"
+
+        # Cloudflare
+        if "cloudflare" in r_lower:
+            return "cloudflare.com", "Cloudflare CDN"
+
+        # Akamai
+        if "akamai" in r_lower:
+            return "akamai.net", "Akamai CDN"
+
+        # Fastly
+        if "fastly" in r_lower:
+            return "fastly.net", "Fastly CDN"
+
+        # Amazon AWS
+        if any(k in r_lower for k in ("aws", "amazon", "cloudfront")):
+            return "amazonaws.com", "Amazon AWS / CloudFront"
+
+        return raw, raw
 
     def _resolve_process_name(self, pid: Optional[int]) -> str:
         """Lightweight on-demand PID name resolution with local caching."""
@@ -79,6 +184,10 @@ class SocketCollector(BaseCollector):
             remote_ip = c.raddr.ip if c.raddr else None
             remote_port = c.raddr.port if c.raddr else None
             remote_host = self._get_hostname(remote_ip) if remote_ip else "—"
+            if remote_ip:
+                resolved_domain, domain_label = self._map_friendly_domain(remote_host, remote_ip)
+            else:
+                resolved_domain, domain_label = "—", "—"
 
             pid = c.pid or 0
             if pid > 0:
@@ -95,6 +204,8 @@ class SocketCollector(BaseCollector):
                 "remote_ip": remote_ip or "—",
                 "remote_port": remote_port or 0,
                 "remote_host": remote_host,
+                "resolved_domain": resolved_domain,
+                "domain_label": domain_label,
                 "state": c.status or "—",
                 "pid": pid,
                 "process_name": pname,

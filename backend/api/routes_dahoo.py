@@ -5,6 +5,7 @@ Provides chat interactions, dynamic mascot expressions, session memory, and AI t
 
 from typing import Optional, Dict, Any
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from backend.engine.dahoo_engine import dahoo_engine
 from backend.engine.aggregator import aggregator
@@ -36,6 +37,28 @@ async def chat_with_dahoo(req: ChatRequest):
         session_id=sid,
         use_cloud=req.use_cloud,
         thinking_level=req.thinking_level
+    )
+
+@router.post("/chat/stream")
+async def chat_with_dahoo_stream(req: ChatRequest):
+    """Streams Dahoo responses via Server-Sent Events (SSE)."""
+    telemetry = aggregator.latest_snapshot or {}
+    sid = req.session_id or "default"
+    generator = dahoo_engine.chat_stream(
+        message=req.message,
+        telemetry=telemetry,
+        session_id=sid,
+        use_cloud=req.use_cloud,
+        thinking_level=req.thinking_level
+    )
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
     )
 
 @router.post("/action")
