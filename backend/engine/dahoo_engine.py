@@ -844,7 +844,7 @@ class DahooEngine:
                 "estimated_cost": 0.0
             }
 
-        # 4. Gemini Cloud LLM Path (Token-optimized, Context-routed, Multi-turn, Gemini 3.8 Flash)
+        # 4. Gemini Cloud LLM Path (Token-optimized, Context-routed, Multi-turn, Gemini 3.5 Flash)
         routed_context = self._build_routed_context(message, telemetry)
 
         # Retrieve recent conversation turns if memory is enabled

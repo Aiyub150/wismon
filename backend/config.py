@@ -34,9 +34,9 @@ RING_BUFFER_SIZE = 300  # 300 samples in RAM for zero-latency charts & SSE
 
 # Dahoo AI Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "medium").lower()
-DAHOO_MAX_OUTPUT_TOKENS = int(os.getenv("DAHOO_MAX_OUTPUT_TOKENS", "2048"))
+DAHOO_MAX_OUTPUT_TOKENS = int(os.getenv("DAHOO_MAX_OUTPUT_TOKENS", "4096"))
 
 # Dahoo Assistant & Session Memory Settings
 DAHOO_MEMORY_ENABLED = os.getenv("DAHOO_MEMORY_ENABLED", "true").lower() == "true"

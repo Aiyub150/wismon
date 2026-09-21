@@ -223,12 +223,12 @@ class DahooController {
           this.speechBubble.textContent = data.proactive_speech;
         }
         this.cloudAvailable = data.cloud_available || false;
-        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.8 Flash' : 'Offline Rule Engine');
+        const rawModel = data.active_model || (this.cloudAvailable ? 'Gemini 3.5 Flash' : 'Offline Rule Engine');
         // Clean any existing parenthesized suffix like (MEDIUM) to avoid duplicate (MEDIUM) (MEDIUM)
         const cleanModel = rawModel.replace(/\s*\([A-Za-z0-9_-]+\)\s*$/, '').trim();
 
         if (this.modelBadge) {
-          this.modelBadge.textContent = data.provider_status || (this.cloudAvailable ? `● ${cleanModel} (Auto)` : '● Local Engine (Offline)');
+          this.modelBadge.textContent = data.provider_status || (this.cloudAvailable ? `● ${cleanModel}` : '● Local Engine (Offline)');
         }
         if (this.thinkingBadge) {
           const lvl = data.thinking_level || 'medium';
@@ -236,7 +236,7 @@ class DahooController {
         }
         if (this.providerStatus) {
           this.providerStatus.innerHTML = this.cloudAvailable 
-            ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span> <span>Auto: ${cleanModel}</span>`
+            ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981;"></span> <span>Cloud: ${cleanModel}</span>`
             : `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #94A3B8;"></span> <span>Offline: Local Engine</span>`;
         }
         if (this.fallbackHint) {
@@ -689,7 +689,7 @@ class DahooController {
               const remainingTok = ev.remaining_tokens !== undefined ? ev.remaining_tokens : null;
               const remainingStr = remainingTok !== null ? ` | Sisa: ${remainingTok.toLocaleString()}` : '';
               if (ev.provider === 'cloud') {
-                const modelName = (ev.model || 'Gemini 3.8 Flash').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const modelName = (ev.model || 'Gemini 3.5 Flash').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 finalMeta = this.formatProviderBadge(`${modelName} (${totalTok} tok${remainingStr})`);
               } else if (ev.provider === 'local-fallback') {
                 finalMeta = this.formatProviderBadge('fallback');
